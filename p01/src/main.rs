@@ -1,8 +1,5 @@
 extern crate aoclib;
 
-use std::env;
-use aoclib::*;
-
 fn solve_a(input : &str) -> u32 {
     let (sum, _) = input.chars().fold((0, input.chars().last().expect("empty string")), |(running_sum, last_char), c| {
         //println!("sum: {}, last: {:?}", running_sum, last_char);
@@ -35,10 +32,10 @@ fn solve_b(input : &str) -> u32 {
 }
 
 fn main() {
-    let input = read_all_stdin();
+    let input = aoclib::read_all_stdin();
 
     let answer;
-    if env::args().len() < 2 {
+    if aoclib::should_solve_puzzle_a() {
         answer = solve_a(&input);
     } else {
         answer = solve_b(&input);
