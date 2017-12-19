@@ -1,11 +1,4 @@
-use std::io::prelude::*;
-use std::env;
-
-fn get_input_from_stdin() -> String {
-    let mut contents = String::new();
-    std::io::stdin().read_to_string(&mut contents).expect("failed to read input from stdin");
-    contents
-}
+extern crate aoclib;
 
 fn solve_a(input : &str) -> u32 {
     let (sum, _) = input.chars().fold((0, input.chars().last().expect("empty string")), |(running_sum, last_char), c| {
@@ -39,14 +32,13 @@ fn solve_b(input : &str) -> u32 {
 }
 
 fn main() {
-    let input = get_input_from_stdin();
-    let input_trimmed = input.trim();
+    let input = aoclib::read_all_stdin();
 
     let answer;
-    if env::args().len() < 2 {
-        answer = solve_a(input_trimmed);
+    if aoclib::should_solve_puzzle_a() {
+        answer = solve_a(&input);
     } else {
-        answer = solve_b(input_trimmed);
+        answer = solve_b(&input);
     }
 
     println!("answer: {}", answer);
