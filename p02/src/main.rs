@@ -3,9 +3,8 @@ use aoclib::*;
 
 fn solve_a(input : &str) -> u32 {
     input.lines().fold(0u32, |sum, line| {
-        let (min, max) = line.split_whitespace().map(|num_str| {
-            num_str.parse::<u32>().expect("failed to parse num")
-        }).fold((None, None), |(min_opt, max_opt), num| {
+        let (min, max) = aoclib::parse_nums::<u32>(&line)
+            .fold((None, None), |(min_opt, max_opt), num| {
             (
                 match min_opt {
                     None => Some(num),
@@ -31,10 +30,7 @@ fn solve_a(input : &str) -> u32 {
 
 fn solve_b(input : &str) -> u32 {
     input.lines().fold(0u32, |sum, line| {
-        let row_nums : Vec<u32> = line.split_whitespace().map(|num_str| {
-            num_str.parse::<u32>().expect("failed to parse num")
-        }).collect();
-
+        let row_nums : Vec<u32> = aoclib::parse_nums::<u32>(&line).collect();
         let divided = row_nums.iter().enumerate().fold(None, |divided_opt, (i, &num1)| {
             match divided_opt {
                 None => {
