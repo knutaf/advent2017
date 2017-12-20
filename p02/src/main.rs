@@ -29,12 +29,45 @@ fn solve_a(input : &str) -> u32 {
     })
 }
 
+fn solve_b(input : &str) -> u32 {
+    input.lines().fold(0u32, |sum, line| {
+        let row_nums : Vec<u32> = line.split_whitespace().map(|num_str| {
+            num_str.parse::<u32>().expect("failed to parse num")
+        }).collect();
+
+        let divided = row_nums.iter().enumerate().fold(None, |divided_opt, (i, &num1)| {
+            match divided_opt {
+                None => {
+                    match row_nums.iter().skip(i + 1).find(|&num2| {
+                        eprintln!("checking {} divisible by {}", num1, num2);
+                        num1 % num2 == 0 || num2 % num1 == 0
+                    }) {
+                        None => None,
+                        Some(num2) => if num1 % num2 == 0 {
+                            Some(num1 / num2)
+                        } else {
+                            Some(num2 / num1)
+                        },
+                    }
+                },
+                _ => divided_opt,
+            }
+        }).expect("didn't find divided num");
+
+        eprintln!("div: {}", divided);
+
+        sum + divided
+    })
+}
+
 fn main() {
     let input = read_all_stdin();
     //eprintln!("input: {}", input);
 
     if aoclib::should_solve_puzzle_a() {
         println!("answer: {}", solve_a(&input));
+    } else {
+        println!("answer: {}", solve_b(&input));
     }
 }
 
@@ -87,5 +120,15 @@ r"5	1	9	5
 2 4	6	8";
 
         assert_eq!(solve_a(&input), 18);
+    }
+
+    #[test]
+    fn b_1() {
+        let input =
+r"5 9 2 8
+9 4 7 3
+3 8 6 5";
+
+        assert_eq!(solve_b(&input), 9);
     }
 }
