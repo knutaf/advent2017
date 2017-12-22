@@ -2,8 +2,9 @@ extern crate aoclib;
 use aoclib::*;
 
 use std::f32;
+use std::collections::HashMap;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct Pos {
     address : u32,
     x : i32,
@@ -15,6 +16,10 @@ fn pos(address : u32, x : i32, y : i32) -> Pos {
 }
 
 impl Pos {
+    fn coords(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+
     fn spiral_iter(&self) -> SpiralWalker {
         SpiralWalker {
             pos: self.clone()
@@ -30,21 +35,26 @@ impl Iterator for SpiralWalker {
     type Item = Pos;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let ring_start_pos = get_ring_start_position(self.pos.address);
-        let ring_side_steps = get_inner_box_side(self.pos.address) + 1;
+        let next_delta;
+        if self.pos.address == 1 {
+            next_delta = (1, 0);
+        } else {
+            let ring_start_pos = get_ring_start_position(self.pos.address);
+            let ring_side_steps = get_inner_box_side(self.pos.address) + 1;
 
-        let ring_base_addr = ring_start_pos.address - 1;
+            let ring_base_addr = ring_start_pos.address - 1;
 
-        let next_delta =
-            if self.pos.address >= ring_base_addr + (ring_side_steps * 3) {
-                (1, 0)
-            } else if self.pos.address >= ring_base_addr + (ring_side_steps * 2) {
-                (0, -1)
-            } else if self.pos.address >= ring_base_addr + (ring_side_steps * 1) {
-                (-1, 0)
-            } else {
-                (0, 1)
-            };
+            next_delta =
+                if self.pos.address >= ring_base_addr + (ring_side_steps * 3) {
+                    (1, 0)
+                } else if self.pos.address >= ring_base_addr + (ring_side_steps * 2) {
+                    (0, -1)
+                } else if self.pos.address >= ring_base_addr + (ring_side_steps * 1) {
+                    (-1, 0)
+                } else {
+                    (0, 1)
+                };
+        }
 
         self.pos = Pos {
             address: self.pos.address + 1,
@@ -53,6 +63,70 @@ impl Iterator for SpiralWalker {
         };
 
         Some(self.pos.clone())
+    }
+}
+
+struct MemoryFiller {
+    mem : HashMap<(i32, i32), u32>,
+    walker : SpiralWalker,
+    max_x : i32,
+}
+
+impl MemoryFiller {
+    fn new() -> MemoryFiller {
+        let ret = MemoryFiller {
+            mem : HashMap::<(i32, i32), u32>::new(),
+            walker : pos(1, 0, 0).spiral_iter(),
+            max_x : 0,
+        };
+
+        let init_coords = ret.walker.pos.coords().clone();
+        let mut ret = ret;
+        ret.set(&init_coords, 1);
+        ret
+    }
+
+    fn get(&self, p : &(i32, i32)) -> &u32 {
+        self.mem.get(p).unwrap_or(&0)
+    }
+
+    fn set(&mut self, p : &(i32, i32), v : u32) {
+        let _ = self.mem.insert(p.clone(), v);
+    }
+
+    fn purge_from_ring_start(&mut self, p : &(i32, i32)) {
+        assert!(p.0 > 0);
+        self.mem.retain(|&(x, _), _| {
+            x.abs() + 1 <= p.0
+        });
+    }
+}
+
+impl Iterator for MemoryFiller {
+    type Item = (Pos, u32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_pos = self.walker.next().unwrap();
+        let next_coords = next_pos.coords();
+
+        if next_coords.0 > self.max_x {
+            self.max_x = next_coords.0;
+            self.purge_from_ring_start(&next_coords);
+        }
+
+        let next_val =
+            self.get(&(next_coords.0 + 1, next_coords.1 + 0)) +
+            self.get(&(next_coords.0 + 1, next_coords.1 + 1)) +
+            self.get(&(next_coords.0 + 0, next_coords.1 + 1)) +
+            self.get(&(next_coords.0 - 1, next_coords.1 + 1)) +
+            self.get(&(next_coords.0 - 1, next_coords.1 - 0)) +
+            self.get(&(next_coords.0 - 1, next_coords.1 - 1)) +
+            self.get(&(next_coords.0 - 0, next_coords.1 - 1)) +
+            self.get(&(next_coords.0 + 1, next_coords.1 - 1));
+
+        self.set(&next_coords, next_val);
+
+        Some((next_pos, next_val))
     }
 }
 
@@ -103,7 +177,11 @@ fn solve_a(input : &str) -> u32 {
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let target_value = aoclib::parse_nums::<u32>(&input).nth(0).expect("failed to parse input");
+    let mut mem = MemoryFiller::new();
+    mem.find(|&(ref _pos, stored_value)| {
+        stored_value > target_value
+    }).unwrap().1
 }
 
 fn main() {
@@ -173,10 +251,52 @@ mod test {
         assert_eq!(solve_a("1024"), 31);
     }
 
+    fn check_next_filler_step(mem : &mut MemoryFiller, expected_value : u32) {
+        let (_pos, actual_value) = mem.next().unwrap();
+        assert_eq!(actual_value, expected_value);
+    }
+
+    // 147  142  133  122   59
+    // 304    5    4    2   57
+    // 330   10    1    1   54
+    // 351   11   23   25   26
+    // 362  747  806  880  931
+    #[test]
+    fn memory_filler_iter() {
+        let mut mem = MemoryFiller::new();
+        check_next_filler_step(&mut mem, 1);
+        check_next_filler_step(&mut mem, 2);
+        check_next_filler_step(&mut mem, 4);
+        check_next_filler_step(&mut mem, 5);
+        check_next_filler_step(&mut mem, 10);
+        check_next_filler_step(&mut mem, 11);
+        check_next_filler_step(&mut mem, 23);
+        check_next_filler_step(&mut mem, 25);
+        check_next_filler_step(&mut mem, 26);
+        check_next_filler_step(&mut mem, 54);
+        check_next_filler_step(&mut mem, 57);
+        check_next_filler_step(&mut mem, 59);
+        check_next_filler_step(&mut mem, 122);
+        check_next_filler_step(&mut mem, 133);
+        check_next_filler_step(&mut mem, 142);
+        check_next_filler_step(&mut mem, 147);
+        check_next_filler_step(&mut mem, 304);
+        check_next_filler_step(&mut mem, 330);
+        check_next_filler_step(&mut mem, 351);
+        check_next_filler_step(&mut mem, 362);
+        check_next_filler_step(&mut mem, 747);
+        check_next_filler_step(&mut mem, 806);
+        check_next_filler_step(&mut mem, 880);
+        check_next_filler_step(&mut mem, 931);
+    }
+
 
     #[test]
     fn b_1() {
-        let input = "0";
-        assert_eq!(solve_b(&input), 0);
+        assert_eq!(solve_b("1"), 2);
+        assert_eq!(solve_b("2"), 4);
+        assert_eq!(solve_b("142"), 147);
+        assert_eq!(solve_b("146"), 147);
+        assert_eq!(solve_b("880"), 931);
     }
 }
