@@ -85,6 +85,11 @@ mod test {
     }
 
     #[test]
+    fn redist_2() {
+        redist_test(&[0, 2, 7, 0], &[2, 4, 1, 2]);
+    }
+
+    #[test]
     fn a_1() {
         let input = "0	2	7	0";
         assert_eq!(solve_a(&input), 5);
