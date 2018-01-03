@@ -1,7 +1,7 @@
 extern crate aoclib;
 use aoclib::*;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 struct State {
     mem : Vec<u32>,
 }
@@ -49,7 +49,19 @@ fn solve_a(input : &str) -> u32 {
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let mut states : Vec<State> = vec![State::from_input(input)];
+
+    let mut pos = aoclib::position_eq(states.iter().take(states.len() - 1), states.last().unwrap());
+    while pos.is_none() {
+        //eprintln!("{:?}", states.last().unwrap());
+
+        let redist = states.last().unwrap().redistribute();
+        states.push(redist);
+        pos = aoclib::position_eq(states.iter().take(states.len() - 1), states.last().unwrap());
+    }
+
+    //eprintln!("{:?}", states.last().unwrap());
+    (states.len() - pos.unwrap() - 1) as u32
 }
 
 fn main() {
@@ -122,7 +134,19 @@ mod test {
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        let input = "0	2	7	0";
+        assert_eq!(solve_b(&input), 4);
+    }
+
+    #[test]
+    fn b_2() {
+        let input = "1	0	0";
+        assert_eq!(solve_b(&input), 3);
+    }
+
+    #[test]
+    fn b_3() {
+        let input = "2	0	0";
+        assert_eq!(solve_b(&input), 5);
     }
 }

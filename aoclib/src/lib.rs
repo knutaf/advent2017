@@ -23,7 +23,12 @@ pub fn parse_nums<'t, T>(string : &'t str) -> impl Iterator<Item = T> + 't
     })
 }
 
-pub fn any_eq<T>(mut iter : impl Iterator<Item = T>, item : T) -> bool
+pub fn position_eq<T>(mut iter : impl Iterator<Item = T>, item : T) -> Option<usize>
     where T : PartialEq {
-    iter.any(|x| { x == item })
+    iter.position(|x| { x == item })
+}
+
+pub fn any_eq<T>(iter : impl Iterator<Item = T>, item : T) -> bool
+    where T : PartialEq {
+    position_eq(iter, item).is_some()
 }
