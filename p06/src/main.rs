@@ -1,12 +1,18 @@
 extern crate aoclib;
 use aoclib::*;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct State {
     mem : Vec<u32>,
 }
 
 impl State {
+    fn from_input(input : &str) -> State {
+        State {
+            mem : aoclib::parse_nums::<u32>(input).collect()
+        }
+    }
+
     fn select(&self) -> (usize, u32) {
         self.mem.iter().enumerate().fold((0, 0), |sel, (i, &val)| {
             if val > sel.1 {
@@ -32,7 +38,14 @@ impl State {
 }
 
 fn solve_a(input : &str) -> u32 {
-    0
+    let mut states : Vec<State> = vec![State::from_input(input)];
+
+    while !aoclib::any_eq(states.iter().take(states.len() - 1), states.last().unwrap()) {
+        let redist = states.last().unwrap().redistribute();
+        states.push(redist);
+    }
+
+    (states.len() - 1) as u32
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -93,6 +106,18 @@ mod test {
     fn a_1() {
         let input = "0	2	7	0";
         assert_eq!(solve_a(&input), 5);
+    }
+
+    #[test]
+    fn a_2() {
+        let input = "1	0	0";
+        assert_eq!(solve_a(&input), 3);
+    }
+
+    #[test]
+    fn a_3() {
+        let input = "2	0	0";
+        assert_eq!(solve_a(&input), 6);
     }
 
     #[test]
