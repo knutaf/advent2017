@@ -1,4 +1,5 @@
 #![feature(conservative_impl_trait)]
+#![feature(universal_impl_trait)]
 
 use std::io::prelude::*;
 use std::env;
@@ -20,4 +21,9 @@ pub fn parse_nums<'t, T>(string : &'t str) -> impl Iterator<Item = T> + 't
             panic!("failed to parse num");
         })
     })
+}
+
+pub fn any_eq<T>(mut iter : impl Iterator<Item = T>, item : T) -> bool
+    where T : PartialEq {
+    iter.any(|x| { x == item })
 }
