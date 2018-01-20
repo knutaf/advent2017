@@ -217,6 +217,30 @@ a (100) -> b, c, d";
     }
 
     #[test]
+    fn a_3() {
+        let input =
+r"f (6)
+e (5) -> f
+d (4) -> e
+c (3) -> d
+b (2) -> c
+a (1) -> b";
+        assert_eq!(solve_a(input), "a");
+    }
+
+    #[test]
+    fn a_4() {
+        let input =
+r"a (1) -> b
+b (2) -> c
+c (3) -> d
+d (4) -> e
+e (5) -> f
+f (6)";
+        assert_eq!(solve_a(input), "a");
+    }
+
+    #[test]
     fn b_1() {
         let input = "blah";
         assert_eq!(solve_b(&input), 0);
