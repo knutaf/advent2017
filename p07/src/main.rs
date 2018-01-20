@@ -123,7 +123,10 @@ fn parse_prog<'t>(line : &'t str) -> ProgInfo<'t> {
 
 fn solve_a<'t>(input : &'t str) -> &'t str {
     let db = ProgDb::from_input(input);
-    db.get_root().name
+
+    // seems like a bug. why can't I just return the value? it doesn't compile
+    let ans = db.get_root().name;
+    ans
 }
 
 fn solve_b(input : &str) -> u32 {
