@@ -102,7 +102,7 @@ impl<'t> ProgDb<'t> {
     }
 }
 
-fn parse_prog(line : &str) -> ProgInfo {
+fn parse_prog<'t>(line : &'t str) -> ProgInfo<'t> {
     lazy_static! {
         static ref RE_PROG_INFO : regex::Regex = Regex::new(r"^(\w+) \((\d+)\)").expect("failed to compile regex");
         static ref RE_PROG_CHILDREN : regex::Regex = Regex::new(r",? (\w+)").expect("failed to compile regex");
@@ -121,8 +121,9 @@ fn parse_prog(line : &str) -> ProgInfo {
     }
 }
 
-fn solve_a(input : &str) -> u32 {
-    0
+fn solve_a<'t>(input : &'t str) -> &'t str {
+    let db = ProgDb::from_input(input);
+    db.get_root().name
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -193,31 +194,23 @@ d (3)";
     }
 
     #[test]
-    fn root_1() {
+    fn a_1() {
         let input =
 r"a (100) -> b, c, d
 b (1)
 c (2)
 d (3)";
-        let db = ProgDb::from_input(input);
-        assert_eq!(db.get_root().name, "a");
+        assert_eq!(solve_a(input), "a");
     }
 
     #[test]
-    fn root_2() {
+    fn a_2() {
         let input =
 r"b (1)
 c (2)
 d (3)
 a (100) -> b, c, d";
-        let db = ProgDb::from_input(input);
-        assert_eq!(db.get_root().name, "a");
-    }
-
-    #[test]
-    fn a_1() {
-        let input = "blah";
-        assert_eq!(solve_a(&input), 0);
+        assert_eq!(solve_a(input), "a");
     }
 
     #[test]
