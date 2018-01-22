@@ -28,6 +28,14 @@ struct Prog<'t> {
     children : Vec<RcRefProg<'t>>,
 }
 
+impl<'t> Prog<'t> {
+    fn get_subtree_weight(&self) -> u32 {
+        self.children.iter().fold(self.weight, |sofar, child| {
+            sofar + child.borrow().get_subtree_weight()
+        })
+    }
+}
+
 struct ProgDb<'t> {
     db : HashMap<&'t str, RcRefProg<'t>>,
 }
@@ -196,6 +204,36 @@ d (3)";
         assert_eq!(db.get("d").unwrap().weight, 3);
     }
 
+
+    #[test]
+    fn subtree_weight_1() {
+        let input =
+r"a (100) -> b, c, d
+b (1)
+c (2)
+d (3)";
+        let db = ProgDb::from_input(input);
+        assert_eq!(db.get("a").unwrap().get_subtree_weight(), 106);
+        assert_eq!(db.get("b").unwrap().get_subtree_weight(), 1);
+        assert_eq!(db.get("c").unwrap().get_subtree_weight(), 2);
+        assert_eq!(db.get("d").unwrap().get_subtree_weight(), 3);
+    }
+
+    #[test]
+    fn subtree_weight_2() {
+        let input =
+r"a (1) -> b
+b (2) -> c
+c (3) -> d
+d (4) -> e
+e (5) -> f
+f (6)";
+        let db = ProgDb::from_input(input);
+        assert_eq!(db.get("a").unwrap().get_subtree_weight(), 21);
+        assert_eq!(db.get("b").unwrap().get_subtree_weight(), 20);
+        assert_eq!(db.get("f").unwrap().get_subtree_weight(), 6);
+    }
+
     #[test]
     fn a_1() {
         let input =
@@ -242,7 +280,33 @@ f (6)";
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        let input =
+r"a (1) -> b, c, d
+b (1)
+c (1)
+d (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2() {
+        let input =
+r"a (1) -> b, c
+b (1) -> d, e
+c (3)
+d (1)
+e (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3() {
+        let input =
+r"a (1) -> b, c
+b (1) -> d, e
+c (5)
+d (2)
+e (1)";
+        assert_eq!(solve_b(&input), 2);
     }
 }
