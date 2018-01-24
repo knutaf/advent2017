@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::cell::Ref;
 use std::collections::HashMap;
 
 #[macro_use] extern crate lazy_static;
@@ -35,18 +34,18 @@ impl<'t> Prog<'t> {
         })
     }
 
-    fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>, Vec<RcRefProg<'t>) {
+    fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>) {
         if self.children.is_empty() {
             (vec![], vec![])
         } else {
             let weight_0 = self.children[0].borrow().get_subtree_weight();
-            self.children.iter().partition(|child| {
+            self.children.iter().map(|child| child.clone()).partition(|child| {
                 child.borrow().get_subtree_weight() == weight_0
             })
         }
     }
 
-    fn is_balanced(partition : &(Vec<RcRefProg<'t>, Vec<RcRefProg<'t>)) -> bool {
+    fn is_balanced(partition : &(Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>)) -> bool {
         !partition.0.is_empty() && partition.1.is_empty()
     }
 }
@@ -112,16 +111,16 @@ impl<'t> ProgDb<'t> {
         self.db.insert(prog_info.name, new_prog);
     }
 
-    fn get(&self, prog_name : &str) -> Option<Ref<Prog<'t>>> {
+    fn get(&self, prog_name : &str) -> Option<RcRefProg<'t>> {
         self.db.get(prog_name).map(|v| {
-            v.borrow()
+            v.clone()
         })
     }
 
-    fn get_root(&self) -> Ref<Prog<'t>> {
+    fn get_root(&self) -> RcRefProg<'t> {
         self.db.values().find(|prog| {
             prog.borrow().parent.is_none()
-        }).unwrap().borrow()
+        }).unwrap().clone()
     }
 }
 
@@ -148,12 +147,12 @@ fn solve_a<'t>(input : &'t str) -> &'t str {
     let db = ProgDb::from_input(input);
 
     // seems like a bug. why can't I just return the value? it doesn't compile
-    let ans = db.get_root().name;
+    let ans = db.get_root().borrow().name;
     ans
 }
 
-fn find_unbalanced_node<'t>(node : Ref<Prog<'t>>, weight_adjustment : i32) -> Option<Ref<Prog<'t>>> {
-    let partition = node.get_balance_partition();
+fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Option<RcRefProg<'t>> {
+    let partition = node.borrow().get_balance_partition();
 
     if Prog::is_balanced(&partition) {
         None
@@ -166,16 +165,20 @@ fn find_unbalanced_node<'t>(node : Ref<Prog<'t>>, weight_adjustment : i32) -> Op
                 panic!("partition 1 had length {}", partition.1.len());
             }
 
+            fn get_unbalanced_node_from_partition<'t>(node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>, weight_adjustment : i32) -> Option<RcRefProg<'t>> {
+                let maybe_unbalanced_node = find_unbalanced_node(node.clone(), weight_adjustment);
+                if maybe_unbalanced_node.is_some() {
+                    maybe_unbalanced_node
+                } else if (node.borrow().get_subtree_weight() as i32) + weight_adjustment == (other_partition_node.borrow().get_subtree_weight() as i32) {
+                    Some(node.clone())
+                } else {
+                    None
+                }
+            }
+
             let unbalanced_node =
                 if partition.0.len() == 1 {
-                    let maybe_unbalanced_node = find_unbalanced_node(partition.0[0].borrow(), weight_adjustment);
-                    if maybe_unbalanced_node.is_some() {
-                        maybe_unbalanced_node
-                    } else if partition.0[0].borrow().get_subtree_weight() + weight_adjustment == partition.1[0].borrow().get_subtree_weight() {
-                        Some(partition.0[0].borrow())
-                    } else {
-                        None
-                    }
+                    get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone(), weight_adjustment)
                 } else {
                     None
                 };
@@ -184,14 +187,7 @@ fn find_unbalanced_node<'t>(node : Ref<Prog<'t>>, weight_adjustment : i32) -> Op
                 if unbalanced_node.is_some() {
                     unbalanced_node
                 } else if partition.1.len() == 1 {
-                    let maybe_unbalanced_node = find_unbalanced_node(partition.1[0].borrow(), weight_adjustment);
-                    if maybe_unbalanced_node.is_some() {
-                        maybe_unbalanced_node
-                    } else if partition.1[0].borrow().get_subtree_weight() - weight_adjustment == partition.0[0].borrow().get_subtree_weight() {
-                        Some(partition.1[0].borrow())
-                    } else {
-                        None
-                    }
+                    get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone(), -weight_adjustment)
                 } else {
                     None
                 };
@@ -216,11 +212,11 @@ fn solve_b(input : &str) -> u32 {
     let db = ProgDb::from_input(input);
     let root = db.get_root();
 
-    let partition = root.get_balance_partition();
+    let partition = root.borrow().get_balance_partition();
     let weight_adjustment = (partition.1[0].borrow().get_subtree_weight() as i32) - (partition.0[0].borrow().get_subtree_weight() as i32);
 
     if let Some(unbalanced_node) = find_unbalanced_node(root, weight_adjustment) {
-        unbalanced_node.weight + weight_adjustment
+        ((unbalanced_node.borrow().weight as i32) + weight_adjustment) as u32
     } else {
         panic!("failed to find unbalanced node");
     }
@@ -269,10 +265,10 @@ c (2)
 d (3)
 a (100) -> b, c, d";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().weight, 100);
-        assert_eq!(db.get("b").unwrap().weight, 1);
-        assert_eq!(db.get("c").unwrap().weight, 2);
-        assert_eq!(db.get("d").unwrap().weight, 3);
+        assert_eq!(db.get("a").unwrap().borrow().weight, 100);
+        assert_eq!(db.get("b").unwrap().borrow().weight, 1);
+        assert_eq!(db.get("c").unwrap().borrow().weight, 2);
+        assert_eq!(db.get("d").unwrap().borrow().weight, 3);
     }
 
     #[test]
@@ -283,10 +279,10 @@ b (1)
 c (2)
 d (3)";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().weight, 100);
-        assert_eq!(db.get("b").unwrap().weight, 1);
-        assert_eq!(db.get("c").unwrap().weight, 2);
-        assert_eq!(db.get("d").unwrap().weight, 3);
+        assert_eq!(db.get("a").unwrap().borrow().weight, 100);
+        assert_eq!(db.get("b").unwrap().borrow().weight, 1);
+        assert_eq!(db.get("c").unwrap().borrow().weight, 2);
+        assert_eq!(db.get("d").unwrap().borrow().weight, 3);
     }
 
 
@@ -298,10 +294,10 @@ b (1)
 c (2)
 d (3)";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().get_subtree_weight(), 106);
-        assert_eq!(db.get("b").unwrap().get_subtree_weight(), 1);
-        assert_eq!(db.get("c").unwrap().get_subtree_weight(), 2);
-        assert_eq!(db.get("d").unwrap().get_subtree_weight(), 3);
+        assert_eq!(db.get("a").unwrap().borrow().get_subtree_weight(), 106);
+        assert_eq!(db.get("b").unwrap().borrow().get_subtree_weight(), 1);
+        assert_eq!(db.get("c").unwrap().borrow().get_subtree_weight(), 2);
+        assert_eq!(db.get("d").unwrap().borrow().get_subtree_weight(), 3);
     }
 
     #[test]
@@ -314,9 +310,9 @@ d (4) -> e
 e (5) -> f
 f (6)";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().get_subtree_weight(), 21);
-        assert_eq!(db.get("b").unwrap().get_subtree_weight(), 20);
-        assert_eq!(db.get("f").unwrap().get_subtree_weight(), 6);
+        assert_eq!(db.get("a").unwrap().borrow().get_subtree_weight(), 21);
+        assert_eq!(db.get("b").unwrap().borrow().get_subtree_weight(), 20);
+        assert_eq!(db.get("f").unwrap().borrow().get_subtree_weight(), 6);
     }
 
     #[test]
