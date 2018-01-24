@@ -34,6 +34,21 @@ impl<'t> Prog<'t> {
             sofar + child.borrow().get_subtree_weight()
         })
     }
+
+    fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>, Vec<RcRefProg<'t>) {
+        if self.children.is_empty() {
+            (vec![], vec![])
+        } else {
+            let weight_0 = self.children[0].borrow().get_subtree_weight();
+            self.children.iter().partition(|child| {
+                child.borrow().get_subtree_weight() == weight_0
+            })
+        }
+    }
+
+    fn is_balanced(partition : &(Vec<RcRefProg<'t>, Vec<RcRefProg<'t>)) -> bool {
+        !partition.0.is_empty() && partition.1.is_empty()
+    }
 }
 
 struct ProgDb<'t> {
@@ -137,8 +152,78 @@ fn solve_a<'t>(input : &'t str) -> &'t str {
     ans
 }
 
+fn find_unbalanced_node<'t>(node : Ref<Prog<'t>>, weight_adjustment : i32) -> Option<Ref<Prog<'t>>> {
+    let partition = node.get_balance_partition();
+
+    if Prog::is_balanced(&partition) {
+        None
+    } else {
+        // child node
+        if partition.0.is_empty() {
+            None
+        } else {
+            if partition.1.is_empty() {
+                panic!("partition 1 had length {}", partition.1.len());
+            }
+
+            let unbalanced_node =
+                if partition.0.len() == 1 {
+                    let maybe_unbalanced_node = find_unbalanced_node(partition.0[0].borrow(), weight_adjustment);
+                    if maybe_unbalanced_node.is_some() {
+                        maybe_unbalanced_node
+                    } else if partition.0[0].borrow().get_subtree_weight() + weight_adjustment == partition.1[0].borrow().get_subtree_weight() {
+                        Some(partition.0[0].borrow())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.1.len() == 1 {
+                    let maybe_unbalanced_node = find_unbalanced_node(partition.1[0].borrow(), weight_adjustment);
+                    if maybe_unbalanced_node.is_some() {
+                        maybe_unbalanced_node
+                    } else if partition.1[0].borrow().get_subtree_weight() - weight_adjustment == partition.0[0].borrow().get_subtree_weight() {
+                        Some(partition.1[0].borrow())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+            unbalanced_node
+        }
+    }
+}
+
 fn solve_b(input : &str) -> u32 {
-    0
+/*
+    1
+ 1     1
+1 1   2 1
+
+    1
+ 1      1
+2 2   2   1
+     1 1
+*/
+
+    let db = ProgDb::from_input(input);
+    let root = db.get_root();
+
+    let partition = root.get_balance_partition();
+    let weight_adjustment = (partition.1[0].borrow().get_subtree_weight() as i32) - (partition.0[0].borrow().get_subtree_weight() as i32);
+
+    if let Some(unbalanced_node) = find_unbalanced_node(root, weight_adjustment) {
+        unbalanced_node.weight + weight_adjustment
+    } else {
+        panic!("failed to find unbalanced node");
+    }
 }
 
 fn main() {
@@ -308,5 +393,33 @@ c (5)
 d (2)
 e (1)";
         assert_eq!(solve_b(&input), 2);
+    }
+
+    #[test]
+    fn b_4() {
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+aaa (1)
+aab (1)
+ab (1) -> aba, abb
+aba (2)
+abb (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_5() {
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+aaa (2)
+aab (2)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (1)";
+        assert_eq!(solve_b(&input), 1);
     }
 }
