@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::cell::Ref;
 use std::collections::HashMap;
+use std::fmt;
 
 #[macro_use] extern crate lazy_static;
 extern crate regex;
@@ -26,6 +26,44 @@ struct Prog<'t> {
     weight : u32,
     parent : Option<RcRefProg<'t>>,
     children : Vec<RcRefProg<'t>>,
+}
+
+impl<'t> Prog<'t> {
+    fn get_subtree_weight(&self) -> u32 {
+        self.children.iter().fold(self.weight, |sofar, child| {
+            sofar + child.borrow().get_subtree_weight()
+        })
+    }
+
+    fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>) {
+        if self.children.is_empty() {
+            (vec![], vec![])
+        } else {
+            let weight_0 = self.children[0].borrow().get_subtree_weight();
+            self.children.iter().map(|child| child.clone()).partition(|child| {
+                child.borrow().get_subtree_weight() == weight_0
+            })
+        }
+    }
+
+    fn is_balanced(partition : &(Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>)) -> bool {
+        !partition.0.is_empty() && partition.1.is_empty()
+    }
+}
+
+impl<'t> fmt::Display for Prog<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let _ = write!(f, "[{} ({})", self.name, self.weight);
+        for (i, c) in self.children.iter().enumerate() {
+            if i == 0 {
+                let _ = write!(f, " -> {}", c.borrow().name);
+            } else {
+                let _ = write!(f, ", {}", c.borrow().name);
+            }
+        }
+
+        write!(f, "]")
+    }
 }
 
 struct ProgDb<'t> {
@@ -89,16 +127,16 @@ impl<'t> ProgDb<'t> {
         self.db.insert(prog_info.name, new_prog);
     }
 
-    fn get(&self, prog_name : &str) -> Option<Ref<Prog<'t>>> {
+    fn get(&self, prog_name : &str) -> Option<RcRefProg<'t>> {
         self.db.get(prog_name).map(|v| {
-            v.borrow()
+            v.clone()
         })
     }
 
-    fn get_root(&self) -> Ref<Prog<'t>> {
+    fn get_root(&self) -> RcRefProg<'t> {
         self.db.values().find(|prog| {
             prog.borrow().parent.is_none()
-        }).unwrap().borrow()
+        }).unwrap().clone()
     }
 }
 
@@ -125,12 +163,105 @@ fn solve_a<'t>(input : &'t str) -> &'t str {
     let db = ProgDb::from_input(input);
 
     // seems like a bug. why can't I just return the value? it doesn't compile
-    let ans = db.get_root().name;
+    let ans = db.get_root().borrow().name;
     ans
 }
 
+fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Option<(RcRefProg<'t>, i32)> {
+    let n = node.borrow();
+    let partition = n.get_balance_partition();
+
+    eprint!("{}, adj {}, partition: (", n, weight_adjustment);
+    for c in partition.0.iter() {
+        eprint!("{}, ", c.borrow());
+    }
+
+    eprint!("/ ");
+
+    for c in partition.1.iter() {
+        eprint!("{}, ", c.borrow());
+    }
+    eprintln!(")");
+
+    if Prog::is_balanced(&partition) {
+        None
+    } else {
+        // child node
+        if partition.0.is_empty() {
+            None
+        } else {
+            if partition.1.is_empty() {
+                panic!("partition 1 had length {}", partition.1.len());
+            }
+
+            let unbalanced_node =
+                if partition.0.len() == 1 {
+                    find_unbalanced_node(partition.0[0].clone(), weight_adjustment)
+                } else {
+                    None
+                };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.1.len() == 1 {
+                    find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
+                } else {
+                    None
+                };
+
+            let get_unbalanced_node_from_partition = |node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>| -> Option<(RcRefProg<'t>, i32)> {
+                eprintln!("comparing {} ({}) to {} ({}), adj {}", node.borrow(), node.borrow().get_subtree_weight(), other_partition_node.borrow(), other_partition_node.borrow().get_subtree_weight(), weight_adjustment);
+
+                if (node.borrow().weight as i32) + weight_adjustment > 0 &&
+                   (node.borrow().get_subtree_weight() as i32) + weight_adjustment == (other_partition_node.borrow().get_subtree_weight() as i32) {
+                    Some((node.clone(), weight_adjustment))
+                } else {
+                    None
+                }
+            };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.0.len() == 1 {
+                    get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone())
+                } else {
+                    None
+                };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.1.len() == 1 {
+                    get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone())
+                } else {
+                    None
+                };
+
+            unbalanced_node
+        }
+    }
+}
+
 fn solve_b(input : &str) -> u32 {
-    0
+    let db = ProgDb::from_input(input);
+    let root = db.get_root();
+
+    let partition = root.borrow().get_balance_partition();
+    let weight1 = partition.1[0].borrow().get_subtree_weight();
+    let weight0 = partition.0[0].borrow().get_subtree_weight();
+    let weight_adjustment = (weight1 as i32) - (weight0 as i32);
+    eprintln!("weight adjustment: {} - {} = {}", weight1, weight0, weight_adjustment);
+
+    if let Some((unbalanced_node, weight_adjustment)) = find_unbalanced_node(root.clone(), weight_adjustment)
+                                                        .or_else(|| find_unbalanced_node(root.clone(), -weight_adjustment)) {
+        let n = unbalanced_node.borrow();
+        eprintln!("Found unbalanced node as {}, with weight adjustment {}", n, weight_adjustment);
+        ((n.weight as i32) + weight_adjustment) as u32
+    } else {
+        panic!("failed to find unbalanced node");
+    }
 }
 
 fn main() {
@@ -176,10 +307,10 @@ c (2)
 d (3)
 a (100) -> b, c, d";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().weight, 100);
-        assert_eq!(db.get("b").unwrap().weight, 1);
-        assert_eq!(db.get("c").unwrap().weight, 2);
-        assert_eq!(db.get("d").unwrap().weight, 3);
+        assert_eq!(db.get("a").unwrap().borrow().weight, 100);
+        assert_eq!(db.get("b").unwrap().borrow().weight, 1);
+        assert_eq!(db.get("c").unwrap().borrow().weight, 2);
+        assert_eq!(db.get("d").unwrap().borrow().weight, 3);
     }
 
     #[test]
@@ -190,10 +321,40 @@ b (1)
 c (2)
 d (3)";
         let db = ProgDb::from_input(input);
-        assert_eq!(db.get("a").unwrap().weight, 100);
-        assert_eq!(db.get("b").unwrap().weight, 1);
-        assert_eq!(db.get("c").unwrap().weight, 2);
-        assert_eq!(db.get("d").unwrap().weight, 3);
+        assert_eq!(db.get("a").unwrap().borrow().weight, 100);
+        assert_eq!(db.get("b").unwrap().borrow().weight, 1);
+        assert_eq!(db.get("c").unwrap().borrow().weight, 2);
+        assert_eq!(db.get("d").unwrap().borrow().weight, 3);
+    }
+
+
+    #[test]
+    fn subtree_weight_1() {
+        let input =
+r"a (100) -> b, c, d
+b (1)
+c (2)
+d (3)";
+        let db = ProgDb::from_input(input);
+        assert_eq!(db.get("a").unwrap().borrow().get_subtree_weight(), 106);
+        assert_eq!(db.get("b").unwrap().borrow().get_subtree_weight(), 1);
+        assert_eq!(db.get("c").unwrap().borrow().get_subtree_weight(), 2);
+        assert_eq!(db.get("d").unwrap().borrow().get_subtree_weight(), 3);
+    }
+
+    #[test]
+    fn subtree_weight_2() {
+        let input =
+r"a (1) -> b
+b (2) -> c
+c (3) -> d
+d (4) -> e
+e (5) -> f
+f (6)";
+        let db = ProgDb::from_input(input);
+        assert_eq!(db.get("a").unwrap().borrow().get_subtree_weight(), 21);
+        assert_eq!(db.get("b").unwrap().borrow().get_subtree_weight(), 20);
+        assert_eq!(db.get("f").unwrap().borrow().get_subtree_weight(), 6);
     }
 
     #[test]
@@ -241,8 +402,186 @@ f (6)";
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_3_children_1() {
+        //    1
+        // 2  1  1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (2)
+ab (1)
+ac (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3_children_2() {
+        //    1
+        // 1  2  1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1)
+ab (2)
+ac (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3_children_3() {
+        //    1
+        // 1  1  2
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1)
+ab (1)
+ac (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2_1() {
+        //       1
+        //   1       3
+        // 1   2
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+ab (3)
+aaa (1)
+aab (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2_2() {
+        //       1
+        //   1       3
+        // 2   1
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+ab (3)
+aaa (2)
+aab (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2_3() {
+        //    1
+        // 3     1
+        //     1   2
+        let input =
+r"a (1) -> aa, ab
+aa (3)
+ab (1) -> aba, abb
+aba (1)
+abb (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3() {
+        let input =
+r"a (1) -> b, c
+b (1) -> d, e
+c (5)
+d (2)
+e (1)";
+        assert_eq!(solve_b(&input), 2);
+    }
+
+    #[test]
+    fn b_4() {
+        //     1
+        //  1     1
+        // 1 1   2 1
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+aaa (1)
+aab (1)
+ab (1) -> aba, abb
+aba (2)
+abb (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_5() {
+        //     1
+        //  1      1
+        // 3 3   2   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_6() {
+        //     1
+        //  1      1     7
+        // 3 3   2   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_7() {
+        //     1
+        //  1      1     6
+        // 3 3   1   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_8() {
+        //     1
+        //  1      1     8
+        // 3 3   1   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
+        assert_eq!(solve_b(&input), 1);
     }
 }
