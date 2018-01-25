@@ -196,34 +196,7 @@ fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Op
 
             let unbalanced_node =
                 if partition.0.len() == 1 {
-                    let maybe_unbalanced_node = find_unbalanced_node(partition.0[0].clone(), weight_adjustment);
-                    if maybe_unbalanced_node.is_some() {
-                        maybe_unbalanced_node
-                    } else if partition.1.len() == 1 {
-                        find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-            fn get_unbalanced_node_from_partition<'t>(node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>, weight_adjustment : i32) -> Option<(RcRefProg<'t>, i32)> {
-                eprintln!("comparing {} to {}, adj {}", node.borrow(), other_partition_node.borrow(), weight_adjustment);
-
-                if (node.borrow().weight as i32) + weight_adjustment > 0 &&
-                   (node.borrow().get_subtree_weight() as i32) + weight_adjustment == (other_partition_node.borrow().get_subtree_weight() as i32) {
-                    Some((node.clone(), weight_adjustment))
-                } else {
-                    None
-                }
-            }
-
-            let unbalanced_node =
-                if unbalanced_node.is_some() {
-                    unbalanced_node
-                } else if partition.0.len() == 1 {
-                    get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone(), weight_adjustment)
+                    find_unbalanced_node(partition.0[0].clone(), weight_adjustment)
                 } else {
                     None
                 };
@@ -232,7 +205,36 @@ fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Op
                 if unbalanced_node.is_some() {
                     unbalanced_node
                 } else if partition.1.len() == 1 {
-                    get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone(), weight_adjustment)
+                    find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
+                } else {
+                    None
+                };
+
+            let get_unbalanced_node_from_partition = |node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>| -> Option<(RcRefProg<'t>, i32)> {
+                eprintln!("comparing {} ({}) to {} ({}), adj {}", node.borrow(), node.borrow().get_subtree_weight(), other_partition_node.borrow(), other_partition_node.borrow().get_subtree_weight(), weight_adjustment);
+
+                if (node.borrow().weight as i32) + weight_adjustment > 0 &&
+                   (node.borrow().get_subtree_weight() as i32) + weight_adjustment == (other_partition_node.borrow().get_subtree_weight() as i32) {
+                    Some((node.clone(), weight_adjustment))
+                } else {
+                    None
+                }
+            };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.0.len() == 1 {
+                    get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone())
+                } else {
+                    None
+                };
+
+            let unbalanced_node =
+                if unbalanced_node.is_some() {
+                    unbalanced_node
+                } else if partition.1.len() == 1 {
+                    get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone())
                 } else {
                     None
                 };
@@ -252,11 +254,8 @@ fn solve_b(input : &str) -> u32 {
     let weight_adjustment = (weight1 as i32) - (weight0 as i32);
     eprintln!("weight adjustment: {} - {} = {}", weight1, weight0, weight_adjustment);
 
-    if let Some((unbalanced_node, weight_adjustment)) = find_unbalanced_node(root.clone(), weight_adjustment) {
-        let n = unbalanced_node.borrow();
-        eprintln!("Found unbalanced node as {}, with weight adjustment {}", n, weight_adjustment);
-        ((n.weight as i32) + weight_adjustment) as u32
-    } else if let Some((unbalanced_node, weight_adjustment)) = find_unbalanced_node(root.clone(), -weight_adjustment) {
+    if let Some((unbalanced_node, weight_adjustment)) = find_unbalanced_node(root.clone(), weight_adjustment)
+                                                        .or_else(|| find_unbalanced_node(root.clone(), -weight_adjustment)) {
         let n = unbalanced_node.borrow();
         eprintln!("Found unbalanced node as {}, with weight adjustment {}", n, weight_adjustment);
         ((n.weight as i32) + weight_adjustment) as u32
@@ -403,7 +402,31 @@ f (6)";
     }
 
     #[test]
-    fn b_1() {
+    fn b_3_children_1() {
+        //    1
+        // 2  1  1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (2)
+ab (1)
+ac (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3_children_2() {
+        //    1
+        // 1  2  1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1)
+ab (2)
+ac (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_3_children_3() {
         //    1
         // 1  1  2
         let input =
@@ -415,7 +438,7 @@ ac (2)";
     }
 
     #[test]
-    fn b_2() {
+    fn b_2_1() {
         //       1
         //   1       3
         // 1   2
@@ -425,6 +448,34 @@ aa (1) -> aaa, aab
 ab (3)
 aaa (1)
 aab (2)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2_2() {
+        //       1
+        //   1       3
+        // 2   1
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+ab (3)
+aaa (2)
+aab (1)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_2_3() {
+        //    1
+        // 3     1
+        //     1   2
+        let input =
+r"a (1) -> aa, ab
+aa (3)
+ab (1) -> aba, abb
+aba (1)
+abb (2)";
         assert_eq!(solve_b(&input), 1);
     }
 
@@ -471,6 +522,66 @@ aba (2) -> abaa, abab
 abaa (1)
 abab (1)
 abb (3)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_6() {
+        //     1
+        //  1      1     7
+        // 3 3   2   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_7() {
+        //     1
+        //  1      1     6
+        // 3 3   1   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
+        assert_eq!(solve_b(&input), 1);
+    }
+
+    #[test]
+    fn b_8() {
+        //     1
+        //  1      1     8
+        // 3 3   1   3
+        //      1 1
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (2) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3)
+ac (7)";
         assert_eq!(solve_b(&input), 1);
     }
 }
