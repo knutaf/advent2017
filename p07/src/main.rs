@@ -36,14 +36,10 @@ impl<'t> Prog<'t> {
     }
 
     fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>) {
-        if self.children.is_empty() {
-            (vec![], vec![])
-        } else {
-            let weight_0 = self.children[0].borrow().get_subtree_weight();
-            self.children.iter().map(|child| child.clone()).partition(|child| {
-                child.borrow().get_subtree_weight() == weight_0
-            })
-        }
+        let weight_0 = self.children.get(0).map_or(0, |child| child.borrow().get_subtree_weight());
+        self.children.iter().map(|child| child.clone()).partition(|child| {
+            child.borrow().get_subtree_weight() == weight_0
+        })
     }
 
     fn is_balanced(partition : &(Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>)) -> bool {
@@ -161,10 +157,7 @@ fn parse_prog<'t>(line : &'t str) -> ProgInfo<'t> {
 
 fn solve_a<'t>(input : &'t str) -> &'t str {
     let db = ProgDb::from_input(input);
-
-    // seems like a bug. why can't I just return the value? it doesn't compile
-    let ans = db.get_root().borrow().name;
-    ans
+    db.get_root().borrow().name
 }
 
 fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Option<(RcRefProg<'t>, i32)> {
@@ -194,22 +187,6 @@ fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Op
                 panic!("partition 1 had length {}", partition.1.len());
             }
 
-            let unbalanced_node =
-                if partition.0.len() == 1 {
-                    find_unbalanced_node(partition.0[0].clone(), weight_adjustment)
-                } else {
-                    None
-                };
-
-            let unbalanced_node =
-                if unbalanced_node.is_some() {
-                    unbalanced_node
-                } else if partition.1.len() == 1 {
-                    find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
-                } else {
-                    None
-                };
-
             let get_unbalanced_node_from_partition = |node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>| -> Option<(RcRefProg<'t>, i32)> {
                 eprintln!("comparing {} ({}) to {} ({}), adj {}", node.borrow(), node.borrow().get_subtree_weight(), other_partition_node.borrow(), other_partition_node.borrow().get_subtree_weight(), weight_adjustment);
 
@@ -221,25 +198,31 @@ fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Op
                 }
             };
 
-            let unbalanced_node =
-                if unbalanced_node.is_some() {
-                    unbalanced_node
-                } else if partition.0.len() == 1 {
+            {
+                if partition.0.len() == 1 {
+                    find_unbalanced_node(partition.0[0].clone(), weight_adjustment)
+                } else {
+                    None
+                }
+            }.or_else(|| {
+                if partition.1.len() == 1 {
+                    find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
+                } else {
+                    None
+                }
+            }).or_else(|| {
+                if partition.0.len() == 1 {
                     get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone())
                 } else {
                     None
-                };
-
-            let unbalanced_node =
-                if unbalanced_node.is_some() {
-                    unbalanced_node
-                } else if partition.1.len() == 1 {
+                }
+            }).or_else(|| {
+                if partition.1.len() == 1 {
                     get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone())
                 } else {
                     None
-                };
-
-            unbalanced_node
+                }
+            })
         }
     }
 }
