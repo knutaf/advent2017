@@ -1,5 +1,6 @@
 #![feature(nll)]
 
+use std::collections::HashMap;
 use std::fmt;
 
 #[macro_use] extern crate lazy_static;
@@ -53,6 +54,19 @@ impl ConditionOperation {
             ">=" => ConditionOperation::GreaterThanEqual,
             "!=" => ConditionOperation::NotEqual,
             _ => panic!("unknown condition operation {}", s)
+        }
+    }
+
+    fn apply<T>(&self, left : T, right : T) -> bool
+        where T : Eq + Ord
+    {
+        match self {
+            &ConditionOperation::LessThan => left < right,
+            &ConditionOperation::GreaterThan => left > right,
+            &ConditionOperation::Equal => left == right,
+            &ConditionOperation::LessThanEqual => left <= right,
+            &ConditionOperation::GreaterThanEqual => left >= right,
+            &ConditionOperation::NotEqual => left != right,
         }
     }
 }
@@ -112,7 +126,14 @@ impl<'t> Program<'t> {
         Program {
             instructions : input.lines().map(|line| {
                 Instruction::from(line)
-            }).collect()
+            }).collect(),
+        }
+    }
+
+    fn run<'a>(&'a self) -> ProgramExecution<'a, 't> {
+        ProgramExecution {
+            instructions : self.instructions.iter(),
+            registers : HashMap::new(),
         }
     }
 }
@@ -124,20 +145,55 @@ impl<'t> fmt::Display for Program<'t> {
                 let _ = writeln!(f, "");
             }
 
-            instruction.fmt(f);
+            let _ = instruction.fmt(f);
         }
 
         write!(f, "")
     }
 }
 
-fn solve_a(input : &str) -> u32 {
-    let prog = Program::from(input);
-    eprintln!("{}", prog);
-    0
+struct ProgramExecution<'a, 't: 'a> {
+    instructions : std::slice::Iter<'a, Instruction<'t>>,
+    registers : HashMap<&'t str, i32>,
 }
 
-fn solve_b(input : &str) -> u32 {
+impl<'a, 't> ProgramExecution<'a, 't> {
+    fn max_value(&self) -> i32 {
+        self.registers.values().map(|v| *v).max().unwrap_or(i32::min_value())
+    }
+
+    fn inc(&mut self, reg : &'t str, by : i32) {
+        self.registers.insert(reg, self.registers.get(reg).unwrap_or(&0) + by);
+    }
+}
+
+impl<'a, 't> Iterator for ProgramExecution<'a, 't> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.instructions.next().map(|instruction| {
+            let condition_reg_value = self.registers.get(instruction.condition_register).unwrap_or(&0);
+            if instruction.condition_op.apply(*condition_reg_value, instruction.condition_val) {
+                let by = match instruction.modify_op {
+                    ModifyOperation::Inc => instruction.modify_by,
+                    ModifyOperation::Dec => -instruction.modify_by,
+                };
+
+                self.inc(instruction.modified_register, by);
+            }
+
+            self.max_value()
+        })
+    }
+}
+
+fn solve_a(input : &str) -> i32 {
+    let prog = Program::from(input);
+    eprintln!("{}", prog);
+    prog.run().last().unwrap_or(i32::min_value())
+}
+
+fn solve_b(input : &str) -> i32 {
     0
 }
 
@@ -158,8 +214,30 @@ mod test {
 
     #[test]
     fn a_1() {
-        let input = "blah";
-        assert_eq!(solve_a(&input), 0);
+        let input =
+r"b inc 5 if a > 1
+a inc 1 if b < 5
+c dec -10 if a >= 1
+c inc -20 if c == 10";
+        assert_eq!(solve_a(&input), 1);
+    }
+
+    #[test]
+    fn a_le() {
+        let input =
+r"b inc 1 if b <= 1
+b inc 1 if b <= 1
+b inc 1 if b <= 1";
+        assert_eq!(solve_a(&input), 2);
+    }
+
+    #[test]
+    fn a_ne() {
+        let input =
+r"b inc 1 if b != 1
+b inc 5 if b != 1
+b inc 6 if b != 0";
+        assert_eq!(solve_a(&input), 7);
     }
 
     #[test]
