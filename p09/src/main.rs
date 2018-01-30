@@ -12,6 +12,7 @@ struct GroupCounter<'t> {
     state : State,
     score : u32,
     depth : u32,
+    garbage_count : u32,
 }
 
 impl<'t> GroupCounter<'t> {
@@ -21,12 +22,13 @@ impl<'t> GroupCounter<'t> {
             state : State::Normal,
             score : 0,
             depth : 0,
+            garbage_count : 0,
         }
     }
 }
 
 impl<'t> Iterator for GroupCounter<'t> {
-    type Item = u32;
+    type Item = (u32, u32);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.chars.next().map(|ch| {
@@ -54,7 +56,9 @@ impl<'t> Iterator for GroupCounter<'t> {
                         '!' => {
                             self.state = State::GarbageCancel;
                         },
-                        _ => {},
+                        _ => {
+                            self.garbage_count += 1;
+                        },
                     }
                 },
                 State::GarbageCancel => {
@@ -62,18 +66,19 @@ impl<'t> Iterator for GroupCounter<'t> {
                 },
             }
 
-            self.score
+            (self.score, self.garbage_count)
         })
     }
 }
 
 fn solve_a(input : &str) -> u32 {
     let counter = GroupCounter::over(input);
-    counter.last().unwrap_or(0)
+    counter.last().unwrap_or((0, 0)).0
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let counter = GroupCounter::over(input);
+    counter.last().unwrap_or((0, 0)).1
 }
 
 fn main() {
@@ -106,7 +111,12 @@ mod test {
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        assert_eq!(solve_b("{<>}"), 0);
+        assert_eq!(solve_b("{<random characters>}"), 17);
+        assert_eq!(solve_b("{<<<<>}"), 3);
+        assert_eq!(solve_b("{<{!>}>}"), 2);
+        assert_eq!(solve_b("{<!!>}"), 0);
+        assert_eq!(solve_b("{<!!!>>}"), 0);
+        assert_eq!(solve_b("{<{o\"i!a,<{i<a>}"), 10);
     }
 }
