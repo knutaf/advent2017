@@ -194,7 +194,9 @@ fn solve_a(input : &str) -> i32 {
 }
 
 fn solve_b(input : &str) -> i32 {
-    0
+    let prog = Program::from(input);
+    eprintln!("{}", prog);
+    prog.run().max().unwrap_or(i32::min_value())
 }
 
 fn main() {
@@ -242,7 +244,11 @@ b inc 6 if b != 0";
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        let input =
+r"b inc 5 if a > 1
+a inc 1 if b < 5
+c dec -10 if a >= 1
+c inc -20 if c == 10";
+        assert_eq!(solve_b(&input), 10);
     }
 }
