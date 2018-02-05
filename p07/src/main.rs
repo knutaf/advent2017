@@ -12,6 +12,8 @@ use regex::Regex;
 extern crate aoclib;
 use aoclib::*;
 
+// Stores just the raw parsed data from the input, not directly linked to
+// supported programs.
 #[derive(PartialEq, Debug)]
 struct ProgInfo<'t> {
     name : &'t str,
@@ -21,6 +23,8 @@ struct ProgInfo<'t> {
 
 type RcRefProg<'t> = Rc<RefCell<Prog<'t>>>;
 
+// Stores a program directly linked to its parent (if there is one) and
+// supported programs.
 struct Prog<'t> {
     name : &'t str,
     weight : u32,
@@ -28,22 +32,104 @@ struct Prog<'t> {
     children : Vec<RcRefProg<'t>>,
 }
 
+struct FoundProg<'t> {
+    prog : RcRefProg<'t>,
+    depth : u32,
+    weight_adjustment : i32,
+}
+
+type MaybeFoundProg<'t> = Option<FoundProg<'t>>;
+
+impl<'t> FoundProg<'t> {
+    fn new(prog : &RcRefProg<'t>, depth : u32, weight_adjustment : i32) -> MaybeFoundProg<'t> {
+        Some(FoundProg {
+            prog : Rc::clone(prog),
+            depth : depth,
+            weight_adjustment : weight_adjustment,
+        })
+    }
+}
+
 impl<'t> Prog<'t> {
+    // Gets the weight of this program plus all children.
     fn get_subtree_weight(&self) -> u32 {
         self.children.iter().fold(self.weight, |sofar, child| {
             sofar + child.borrow().get_subtree_weight()
         })
     }
 
-    fn get_balance_partition(&self) -> (Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>) {
+    // This function returns which child programs need to be investigated to see if they are the
+    // single unbalanced program. It returns exactly 0, 1, or 2 child programs:
+    // - 0 if there are no child programs OR if all child programs have the same subtree weight,
+    //   then none need to be investigated because all children are balanced
+    // - 1 if it's clear to identify which child program's subtree weight is the only unbalanced
+    //   one, i.e. if it's a 2 v 1 situation.
+    // - 2 if there are exactly two children with different weights. With the information supplied,
+    //   we can't tell which one is correct, so both need to be investigated.
+    fn find_unbalanced_subtrees(&self, depth : u32) -> (MaybeFoundProg<'t>, MaybeFoundProg<'t>) {
+        // Get the first child's subtree weight, or just use 0 if there are
+        // no children.
         let weight_0 = self.children.get(0).map_or(0, |child| child.borrow().get_subtree_weight());
-        self.children.iter().map(|child| child.clone()).partition(|child| {
-            child.borrow().get_subtree_weight() == weight_0
-        })
-    }
 
-    fn is_balanced(partition : &(Vec<RcRefProg<'t>>, Vec<RcRefProg<'t>>)) -> bool {
-        !partition.0.is_empty() && partition.1.is_empty()
+        // Partition into two sets, based on whether equal to the first child's subtree
+        // weight (partition.0) or not (partition.1).
+        let partition : (Vec<&RcRefProg<'t>>, Vec<&RcRefProg<'t>>) = self.children.iter().partition(|child| {
+            child.borrow().get_subtree_weight() == weight_0
+        });
+
+        match partition.0.len() {
+            0 => {
+                match partition.1.len() {
+                    // 0 and 0. There are no children, so nothing to be investigated
+                    0 => {
+                        (None, None)
+                    },
+                    _ => {
+                        // 0 and anything
+                        panic!("impossible: can't have subtree weights unequal to the first child's subtree weight if none equal to the first child's subtree weight");
+                    },
+                }
+            },
+            1 => {
+                match partition.1.len() {
+                    0 => {
+                        // 1 and 0
+                        panic!("invalid input - all programs support 2 or more child programs");
+                    },
+                    1 => {
+                        // 1 and 1
+                        // There are exactly two child programs with different weights. We need to
+                        // investigate both of them. Also supply the weight adjustment for each as
+                        // the difference between subtree weights (i.e. the weight needed to bring
+                        // a subtree to be the same weight as the other one).
+                        let weight_1 = partition.1[0].borrow().get_subtree_weight();
+                        let weight_adjustment = (weight_1 as i32) - (weight_0 as i32);
+                        (FoundProg::new(partition.0[0], depth, weight_adjustment), FoundProg::new(partition.1[0], depth, -weight_adjustment))
+                    },
+                    _ => {
+                        // It's a 2 vs 1 weight situation, so we know the one with only 1 child
+                        // program in the partition is the only one we need to investigate.
+                        (FoundProg::new(partition.0[0], depth, (partition.1[0].borrow().get_subtree_weight() as i32) - (partition.0[0].borrow().get_subtree_weight() as i32)), None)
+                    }
+                }
+            },
+            _ => {
+                match partition.1.len() {
+                    0 => {
+                        // 2 and 0. All child programs' subtree weights are the same, so nothing
+                        // to investigate.
+                        (None, None)
+                    },
+                    1 => {
+                        // 2 and 1. We know the one alone is the only one we need to investigate.
+                        (FoundProg::new(partition.1[0], depth, (partition.0[0].borrow().get_subtree_weight() as i32) - (partition.1[0].borrow().get_subtree_weight() as i32)), None)
+                    },
+                    _ => {
+                        panic!("invalid input - should never have two subtrees that are unbalanced");
+                    }
+                }
+            },
+        }
     }
 }
 
@@ -83,6 +169,11 @@ impl<'t> ProgDb<'t> {
         pdb
     }
 
+    // Take a ProgInfo and add it to the map, either creating a new object or
+    // filling in the details of a skeleton object from a previous load_prog
+    // call. Link it to any children, too. If the children are already in the
+    // map, link to the already existing objects. If not, create new skeleton
+    // objects that will be filled in later by another load_prog call.
     fn load_prog(&mut self, prog_info : ProgInfo<'t>) {
         let new_prog = match self.db.get(prog_info.name) {
             None => Rc::new(RefCell::new(Prog {
@@ -129,6 +220,8 @@ impl<'t> ProgDb<'t> {
         })
     }
 
+    // Search for any program that doesn't have a parent link. That one is the
+    // root.
     fn get_root(&self) -> RcRefProg<'t> {
         self.db.values().find(|prog| {
             prog.borrow().parent.is_none()
@@ -160,90 +253,69 @@ fn solve_a<'t>(input : &'t str) -> &'t str {
     db.get_root().borrow().name
 }
 
-fn find_unbalanced_node<'t>(node : RcRefProg<'t>, weight_adjustment : i32) -> Option<(RcRefProg<'t>, i32)> {
-    let n = node.borrow();
-    let partition = n.get_balance_partition();
-
-    eprint!("{}, adj {}, partition: (", n, weight_adjustment);
-    for c in partition.0.iter() {
-        eprint!("{}, ", c.borrow());
-    }
-
-    eprint!("/ ");
-
-    for c in partition.1.iter() {
-        eprint!("{}, ", c.borrow());
-    }
-    eprintln!(")");
-
-    if Prog::is_balanced(&partition) {
-        None
-    } else {
-        // child node
-        if partition.0.is_empty() {
-            None
-        } else {
-            if partition.1.is_empty() {
-                panic!("partition 1 had length {}", partition.1.len());
+// Helper function that takes two candidates that are unbalanced and picks the one that came from
+// deepest in the tree.
+fn pick_deepest_program<'t>(candidate0 : MaybeFoundProg<'t>, candidate1 : MaybeFoundProg<'t>) -> MaybeFoundProg<'t> {
+    if let Some(c0) = candidate0 {
+        if let Some(c1) = candidate1 {
+            if c0.depth > c1.depth {
+                Some(c0)
+            } else {
+                Some(c1)
             }
-
-            let get_unbalanced_node_from_partition = |node : RcRefProg<'t>, other_partition_node : RcRefProg<'t>| -> Option<(RcRefProg<'t>, i32)> {
-                eprintln!("comparing {} ({}) to {} ({}), adj {}", node.borrow(), node.borrow().get_subtree_weight(), other_partition_node.borrow(), other_partition_node.borrow().get_subtree_weight(), weight_adjustment);
-
-                if (node.borrow().weight as i32) + weight_adjustment > 0 &&
-                   (node.borrow().get_subtree_weight() as i32) + weight_adjustment == (other_partition_node.borrow().get_subtree_weight() as i32) {
-                    Some((node.clone(), weight_adjustment))
-                } else {
-                    None
-                }
-            };
-
-            {
-                if partition.0.len() == 1 {
-                    find_unbalanced_node(partition.0[0].clone(), weight_adjustment)
-                } else {
-                    None
-                }
-            }.or_else(|| {
-                if partition.1.len() == 1 {
-                    find_unbalanced_node(partition.1[0].clone(), -weight_adjustment)
-                } else {
-                    None
-                }
-            }).or_else(|| {
-                if partition.0.len() == 1 {
-                    get_unbalanced_node_from_partition(partition.0[0].clone(), partition.1[0].clone())
-                } else {
-                    None
-                }
-            }).or_else(|| {
-                if partition.1.len() == 1 {
-                    get_unbalanced_node_from_partition(partition.1[0].clone(), partition.0[0].clone())
-                } else {
-                    None
-                }
-            })
+        } else {
+            Some(c0)
         }
+    } else if candidate1.is_some() {
+        candidate1
+    } else {
+        None
     }
+}
+
+// Searches for an unbalanced program under this one. It only picks from a child program or
+// something underneath it. It is already supplied the weight adjustment needed to balance the
+// whole tree, and it keeps track of how deep in the traversal it is.
+fn find_unbalanced_child_program<'t>(program : &RcRefProg<'t>, current_depth : u32, weight_adjustment : i32) -> MaybeFoundProg<'t> {
+    // Ask for which child programs need to be investigated, and what weight adjustment is needed
+    // to balance them.
+    let (subtree0, subtree1) = program.borrow().find_unbalanced_subtrees(current_depth);
+
+    eprintln!("find_unbalanced_child_program {}, depth {}, adj {}, trees ({}, {})", program.borrow(), current_depth, weight_adjustment, subtree0.is_some(), subtree1.is_some());
+
+    let find_unbalanced_program_in_subtree = |subtree : FoundProg<'t>| {
+        eprintln!("find_unbalanced_program_in_subtree {}, adj {}", subtree.prog.borrow(), subtree.weight_adjustment);
+        if subtree.weight_adjustment == weight_adjustment {
+            find_unbalanced_child_program(&subtree.prog, subtree.depth + 1, subtree.weight_adjustment).or(Some(subtree))
+        } else {
+            None
+        }
+    };
+
+    let candidate0 = subtree0.and_then(&find_unbalanced_program_in_subtree);
+    let candidate1 = subtree1.and_then(&find_unbalanced_program_in_subtree);
+    pick_deepest_program(candidate0, candidate1)
 }
 
 fn solve_b(input : &str) -> u32 {
     let db = ProgDb::from_input(input);
     let root = db.get_root();
 
-    let partition = root.borrow().get_balance_partition();
-    let weight1 = partition.1[0].borrow().get_subtree_weight();
-    let weight0 = partition.0[0].borrow().get_subtree_weight();
-    let weight_adjustment = (weight1 as i32) - (weight0 as i32);
-    eprintln!("weight adjustment: {} - {} = {}", weight1, weight0, weight_adjustment);
+    let (subtree0, subtree1) = root.borrow().find_unbalanced_subtrees(0);
 
-    if let Some((unbalanced_node, weight_adjustment)) = find_unbalanced_node(root.clone(), weight_adjustment)
-                                                        .or_else(|| find_unbalanced_node(root.clone(), -weight_adjustment)) {
-        let n = unbalanced_node.borrow();
-        eprintln!("Found unbalanced node as {}, with weight adjustment {}", n, weight_adjustment);
-        ((n.weight as i32) + weight_adjustment) as u32
+    let find_unbalanced_program_in_subtree = |subtree : FoundProg| {
+        find_unbalanced_child_program(&root, 0, subtree.weight_adjustment)
+    };
+
+    let candidate0 = subtree0.and_then(&find_unbalanced_program_in_subtree);
+    let candidate1 = subtree1.and_then(&find_unbalanced_program_in_subtree);
+
+    if let Some(found_program) = pick_deepest_program(candidate0, candidate1) {
+        let n = found_program.prog.borrow();
+        eprintln!("Found unbalanced program as {} at depth {}, with weight adjustment {}", n, found_program.depth, found_program.weight_adjustment);
+        ((n.weight as i32) + found_program.weight_adjustment) as u32
     } else {
-        panic!("failed to find unbalanced node");
+        panic!("failed to find unbalanced program");
     }
 }
 
