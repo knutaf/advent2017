@@ -66,7 +66,7 @@ impl<'t> Prog<'t> {
     //   one, i.e. if it's a 2 v 1 situation.
     // - 2 if there are exactly two children with different weights. With the information supplied,
     //   we can't tell which one is correct, so both need to be investigated.
-    fn find_unbalanced_subtrees(&self, depth : u32) -> (MaybeFoundProg<'t>, MaybeFoundProg<'t>) {
+    fn find_unbalanced_subtrees(&self, depth : u32, previous_weight_adjustment : i32) -> (MaybeFoundProg<'t>, MaybeFoundProg<'t>) {
         // Get the first child's subtree weight, or just use 0 if there are
         // no children.
         let weight_0 = self.children.get(0).map_or(0, |child| child.borrow().get_subtree_weight());
@@ -93,8 +93,11 @@ impl<'t> Prog<'t> {
             1 => {
                 match partition.1.len() {
                     0 => {
-                        // 1 and 0
-                        panic!("invalid input - all programs support 2 or more child programs");
+                        // 1 and 0. There's only one child, so we know which one needs to be
+                        // investigated. With only one child program we can't figure out what the
+                        // weight adjustment in that subtree should be, so pass on whatever was
+                        // supplied to us.
+                        (FoundProg::new(partition.0[0], depth, previous_weight_adjustment), None)
                     },
                     1 => {
                         // 1 and 1
@@ -274,49 +277,51 @@ fn pick_deepest_program<'t>(candidate0 : MaybeFoundProg<'t>, candidate1 : MaybeF
 }
 
 // Searches for an unbalanced program under this one. It only picks from a child program or
-// something underneath it. It is already supplied the weight adjustment needed to balance the
-// whole tree, and it keeps track of how deep in the traversal it is.
+// something underneath it, not this program itself. It is already supplied the weight adjustment
+// needed to balance the whole tree, and it keeps track of how deep in the traversal it is.
 fn find_unbalanced_child_program<'t>(program : &RcRefProg<'t>, current_depth : u32, weight_adjustment : i32) -> MaybeFoundProg<'t> {
     // Ask for which child programs need to be investigated, and what weight adjustment is needed
-    // to balance them.
-    let (subtree0, subtree1) = program.borrow().find_unbalanced_subtrees(current_depth);
+    // to balance each one.
+    let (subtree0, subtree1) = program.borrow().find_unbalanced_subtrees(current_depth, weight_adjustment);
 
     eprintln!("find_unbalanced_child_program {}, depth {}, adj {}, trees ({}, {})", program.borrow(), current_depth, weight_adjustment, subtree0.is_some(), subtree1.is_some());
 
+    // Helper function to search a subtree only if the weight adjustment would balance the tree if
+    // applied to it.
     let find_unbalanced_program_in_subtree = |subtree : FoundProg<'t>| {
         eprintln!("find_unbalanced_program_in_subtree {}, adj {}", subtree.prog.borrow(), subtree.weight_adjustment);
-        if subtree.weight_adjustment == weight_adjustment {
+        if current_depth == 0 || subtree.weight_adjustment == weight_adjustment {
+            // If the weight adjustment would fix this subtree, then either we pick something
+            // deeper in the subtree or that program itself.
             find_unbalanced_child_program(&subtree.prog, subtree.depth + 1, subtree.weight_adjustment).or(Some(subtree))
         } else {
             None
         }
     };
 
+    // Search both sides of the partition and pick the deepest program that fixes the balance of
+    // the tree, in the case of having exactly two children.
     let candidate0 = subtree0.and_then(&find_unbalanced_program_in_subtree);
     let candidate1 = subtree1.and_then(&find_unbalanced_program_in_subtree);
     pick_deepest_program(candidate0, candidate1)
 }
 
-fn solve_b(input : &str) -> u32 {
+fn solve_b_with_program<'t>(input : &'t str) -> (MaybeFoundProg<'t>, u32) {
     let db = ProgDb::from_input(input);
     let root = db.get_root();
 
-    let (subtree0, subtree1) = root.borrow().find_unbalanced_subtrees(0);
-
-    let find_unbalanced_program_in_subtree = |subtree : FoundProg| {
-        find_unbalanced_child_program(&root, 0, subtree.weight_adjustment)
-    };
-
-    let candidate0 = subtree0.and_then(&find_unbalanced_program_in_subtree);
-    let candidate1 = subtree1.and_then(&find_unbalanced_program_in_subtree);
-
-    if let Some(found_program) = pick_deepest_program(candidate0, candidate1) {
-        let n = found_program.prog.borrow();
-        eprintln!("Found unbalanced program as {} at depth {}, with weight adjustment {}", n, found_program.depth, found_program.weight_adjustment);
-        ((n.weight as i32) + found_program.weight_adjustment) as u32
-    } else {
+    find_unbalanced_child_program(&root, 0, 0).map_or_else(|| {
         panic!("failed to find unbalanced program");
-    }
+    },
+    |found_program| {
+        let weight = ((found_program.prog.borrow().weight as i32) + found_program.weight_adjustment) as u32;
+        eprintln!("Found unbalanced program as {} at depth {}, with weight adjustment {}", found_program.prog.borrow(), found_program.depth, found_program.weight_adjustment);
+        (Some(found_program), weight)
+    })
+}
+
+fn solve_b(input : &str) -> u32 {
+    solve_b_with_program(input).1
 }
 
 fn main() {
@@ -456,6 +461,12 @@ f (6)";
         assert_eq!(solve_a(input), "a");
     }
 
+    fn solve_b_test(input : &str, expected_program_name : &str, expected_weight : u32) {
+        let (found_prog, weight) = solve_b_with_program(input);
+        assert_eq!(found_prog.unwrap().prog.borrow().name, expected_program_name);
+        assert_eq!(weight, expected_weight);
+    }
+
     #[test]
     fn b_3_children_1() {
         //    1
@@ -465,7 +476,7 @@ r"a (1) -> aa, ab, ac
 aa (2)
 ab (1)
 ac (1)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aa", 1);
     }
 
     #[test]
@@ -477,7 +488,7 @@ r"a (1) -> aa, ab, ac
 aa (1)
 ab (2)
 ac (1)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "ab", 1);
     }
 
     #[test]
@@ -489,7 +500,7 @@ r"a (1) -> aa, ab, ac
 aa (1)
 ab (1)
 ac (2)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "ac", 1);
     }
 
     #[test]
@@ -503,7 +514,7 @@ aa (1) -> aaa, aab
 ab (3)
 aaa (1)
 aab (2)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aab", 1);
     }
 
     #[test]
@@ -517,7 +528,7 @@ aa (1) -> aaa, aab
 ab (3)
 aaa (2)
 aab (1)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aaa", 1);
     }
 
     #[test]
@@ -531,7 +542,7 @@ aa (3)
 ab (1) -> aba, abb
 aba (1)
 abb (2)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "abb", 1);
     }
 
     #[test]
@@ -542,7 +553,7 @@ b (1) -> d, e
 c (5)
 d (2)
 e (1)";
-        assert_eq!(solve_b(&input), 2);
+        solve_b_test(&input, "e", 2);
     }
 
     #[test]
@@ -558,7 +569,7 @@ aab (1)
 ab (1) -> aba, abb
 aba (2)
 abb (1)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aba", 1);
     }
 
     #[test]
@@ -577,7 +588,7 @@ aba (2) -> abaa, abab
 abaa (1)
 abab (1)
 abb (3)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aba", 1);
     }
 
     #[test]
@@ -597,7 +608,7 @@ abaa (1)
 abab (1)
 abb (3)
 ac (7)";
-        assert_eq!(solve_b(&input), 1);
+        solve_b_test(&input, "aba", 1);
     }
 
     #[test]
@@ -612,12 +623,12 @@ aa (1) -> aaa, aab
 aaa (3)
 aab (3)
 ab (1) -> aba, abb
-aba (2) -> abaa, abab
+aba (1) -> abaa, abab
 abaa (1)
 abab (1)
 abb (3)
-ac (7)";
-        assert_eq!(solve_b(&input), 1);
+ac (6)";
+        solve_b_test(&input, "ac", 7);
     }
 
     #[test]
@@ -632,11 +643,65 @@ aa (1) -> aaa, aab
 aaa (3)
 aab (3)
 ab (1) -> aba, abb
-aba (2) -> abaa, abab
+aba (1) -> abaa, abab
 abaa (1)
 abab (1)
 abb (3)
-ac (7)";
-        assert_eq!(solve_b(&input), 1);
+ac (8)";
+        solve_b_test(&input, "ac", 7);
+    }
+
+    #[test]
+    fn b_k01() {
+        let input =
+r"a (1) -> aa, ab, ac
+aa (2)
+ab (2)
+ac (1)";
+        solve_b_test(&input, "ac", 2);
+    }
+
+    #[test]
+    fn b_k04() {
+        let input =
+r"a (1) -> aa, ab
+aa (1) -> aaa, aab
+ab (5)
+aaa (1)
+aab (2)";
+        solve_b_test(&input, "aaa", 2);
+    }
+
+    #[test]
+    fn b_k07() {
+        let input =
+r"a (1) -> aa, ab
+aa (5) -> aaa, aab
+aaa (1)
+aab (1)
+ab (1) -> aba
+aba (1) -> abaa
+abaa (1) -> abaaa, abaab
+abaaa (2)
+abaab (1)";
+        solve_b_test(&input, "abaab", 2);
+    }
+
+    #[test]
+    fn b_k08() {
+        let input =
+r"a (1) -> aa, ab, ac
+aa (1) -> aaa, aab
+aaa (3)
+aab (3)
+ab (1) -> aba, abb
+aba (3) -> abaa, abab
+abaa (1)
+abab (1)
+abb (3) -> abba, abbb
+abba (1)
+abbb (1)
+ac (11)";
+        solve_b_test(&input, "aa", 5);
     }
 }
