@@ -60,11 +60,11 @@ impl<'t> Prog<'t> {
 
     // This function returns which child programs need to be investigated to see if they are the
     // single unbalanced program. It returns exactly 0, 1, or 2 child programs:
-    // - 0 if there are no child programs OR if all child programs have the same subtree weight,
+    // - 0: if there are no child programs OR if all child programs have the same subtree weight,
     //   then none need to be investigated because all children are balanced
-    // - 1 if it's clear to identify which child program's subtree weight is the only unbalanced
+    // - 1: if it's clear to identify which child program's subtree weight is the only unbalanced
     //   one, i.e. if it's a 2 v 1 situation.
-    // - 2 if there are exactly two children with different weights. With the information supplied,
+    // - 2: if there are exactly two children with different weights. With the information supplied,
     //   we can't tell which one is correct, so both need to be investigated.
     fn find_unbalanced_subtrees(&self, depth : u32, previous_weight_adjustment : i32) -> (MaybeFoundProg<'t>, MaybeFoundProg<'t>) {
         // Get the first child's subtree weight, or just use 0 if there are
@@ -256,26 +256,6 @@ fn solve_a<'t>(input : &'t str) -> &'t str {
     db.get_root().borrow().name
 }
 
-// Helper function that takes two candidates that are unbalanced and picks the one that came from
-// deepest in the tree.
-fn pick_deepest_program<'t>(candidate0 : MaybeFoundProg<'t>, candidate1 : MaybeFoundProg<'t>) -> MaybeFoundProg<'t> {
-    if let Some(c0) = candidate0 {
-        if let Some(c1) = candidate1 {
-            if c0.depth > c1.depth {
-                Some(c0)
-            } else {
-                Some(c1)
-            }
-        } else {
-            Some(c0)
-        }
-    } else if candidate1.is_some() {
-        candidate1
-    } else {
-        None
-    }
-}
-
 // Searches for an unbalanced program under this one. It only picks from a child program or
 // something underneath it, not this program itself. It is already supplied the weight adjustment
 // needed to balance the whole tree, and it keeps track of how deep in the traversal it is.
@@ -299,11 +279,27 @@ fn find_unbalanced_child_program<'t>(program : &RcRefProg<'t>, current_depth : u
         }
     };
 
-    // Search both sides of the partition and pick the deepest program that fixes the balance of
-    // the tree, in the case of having exactly two children.
+    // Search both sides of the partition, because at this point we may not have a clear answer
+    // about which holds the unbalanced node.
     let candidate0 = subtree0.and_then(&find_unbalanced_program_in_subtree);
     let candidate1 = subtree1.and_then(&find_unbalanced_program_in_subtree);
-    pick_deepest_program(candidate0, candidate1)
+
+    // At many heights of the tree it's possible to pick some arbitrary weight adjustment and fix
+    // the balance as can be seen at that narrow point, but the deepest place where such an
+    // adjustment is made is the true one, so pick the deepest program found.
+    if let Some(ref c0) = candidate0 {
+        if let Some(ref c1) = candidate1 {
+            if c0.depth > c1.depth {
+                candidate0
+            } else {
+                candidate1
+            }
+        } else {
+            candidate0
+        }
+    } else {
+        candidate1
+    }
 }
 
 fn solve_b_with_program<'t>(input : &'t str) -> (MaybeFoundProg<'t>, u32) {
