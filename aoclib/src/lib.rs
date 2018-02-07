@@ -1,8 +1,10 @@
+#![feature(nll)]
 #![feature(conservative_impl_trait)]
 #![feature(universal_impl_trait)]
 
 use std::io::prelude::*;
 use std::env;
+pub mod list;
 
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
