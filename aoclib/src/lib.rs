@@ -40,7 +40,7 @@ pub fn reverse_circular_vec_segment<T>(v : &mut Vec<T>, start_index : usize, len
         let mut start_index = start_index;
 
         let mut end_index = start_index + length - 1;
-        if end_index >= v.len() {
+        while end_index >= v.len() {
             end_index -= v.len();
         }
 
