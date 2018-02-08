@@ -124,7 +124,7 @@ impl<T> Iterator for ListNodeIterator<T> {
 
 impl<T> ListSegment<T> {
     // note: consumes self as it splits the list and extracts this into a standalone list
-    fn extract(self) -> (RcListNode<T>, RcListNode<T>) {
+    pub fn extract(self) -> (RcListNode<T>, RcListNode<T>) {
         if Rc::ptr_eq(&self.start, &self.end) && Rc::ptr_eq(&self.start, self.start.borrow().next.as_ref().unwrap()) {
             (self.start, self.end)
         } else {
