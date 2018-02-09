@@ -6,6 +6,18 @@ use std::io::prelude::*;
 use std::env;
 pub mod list;
 
+pub trait HexWidth: std::fmt::LowerHex {
+    const WIDTH : usize;
+}
+
+impl HexWidth for u8 {
+    const WIDTH : usize = 2;
+}
+
+impl HexWidth for u32 {
+    const WIDTH : usize = 8;
+}
+
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
     std::io::stdin().read_to_string(&mut contents).expect("failed to read input from stdin");
@@ -64,6 +76,15 @@ pub fn reverse_circular_vec_segment<T>(v : &mut Vec<T>, start_index : usize, len
     }
 }
 
+pub fn numbers_to_hex_string<T>(iter : impl Iterator<Item = T>) -> String
+where T : HexWidth {
+    let mut result = String::new();
+    let _ = iter.fold((), |_, n| {
+        result.push_str(format!("{0:01$x}", n, T::WIDTH).as_str());
+    });
+    result
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -108,5 +129,15 @@ mod test {
         let mut v = vec![0, 1, 2, 3, 4, 5];
         reverse_circular_vec_segment(&mut v, 3, 6);
         assert_eq!(v, vec![5, 4, 3, 2, 1, 0]);
+    }
+
+    #[test]
+    fn format_hex_u8() {
+        assert_eq!(numbers_to_hex_string(0x0u8 .. 0x10u8), "000102030405060708090a0b0c0d0e0f");
+    }
+
+    #[test]
+    fn format_hex_u32() {
+        assert_eq!(numbers_to_hex_string(0x0u32 .. 0x2u32), "0000000000000001");
     }
 }
