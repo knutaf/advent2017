@@ -58,7 +58,7 @@ fn solve_a(input : &str, ring_size : u32) -> u32 {
 fn solve_b(input : &str) -> String {
     const SUFFIX_LENGTHS : [u8 ; 5] = [17u8, 31u8, 73u8, 47u8, 23u8];
     const NUM_ROUNDS : u32 = 64;
-    const BLOCK_SIZE : u32 = 16;
+    const BLOCK_SIZE : usize = 16;
 
     let mut ring = Ring::new(256);
 
@@ -72,7 +72,9 @@ fn solve_b(input : &str) -> String {
         }
     }
 
-    String::from("")
+    let reduced = ring.reduce(BLOCK_SIZE);
+    //aoclib::numbers_to_hex_string(reduced.iter().map(std::ops::Deref::deref))
+    aoclib::numbers_to_hex_string(reduced.iter().map(|n| *n as u8))
 }
 
 fn main() {
@@ -127,8 +129,10 @@ mod test {
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), "");
+    fn b_given() {
+        assert_eq!(solve_b(""), "a2582a3a0e66e6e86e3812dcb672a272");
+        assert_eq!(solve_b("AoC 2017"), "33efeb34ea91902bb2f59c9920caa6cd");
+        assert_eq!(solve_b("1,2,3"), "3efbe78a8d82f29979031a4aa0b16a9d");
+        assert_eq!(solve_b("1,2,4"), "63960835bcdc130f0b66d7ff4f6a5a8e");
     }
 }
