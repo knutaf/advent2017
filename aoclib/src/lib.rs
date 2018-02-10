@@ -6,18 +6,6 @@ use std::io::prelude::*;
 use std::env;
 pub mod list;
 
-pub trait HexWidth: std::fmt::LowerHex {
-    const WIDTH : usize;
-}
-
-impl HexWidth for u8 {
-    const WIDTH : usize = 2;
-}
-
-impl HexWidth for u32 {
-    const WIDTH : usize = 8;
-}
-
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
     std::io::stdin().read_to_string(&mut contents).expect("failed to read input from stdin");
@@ -77,10 +65,10 @@ pub fn reverse_circular_vec_segment<T>(v : &mut Vec<T>, start_index : usize, len
 }
 
 pub fn numbers_to_hex_string<T>(iter : impl Iterator<Item = T>) -> String
-where T : HexWidth {
+where T : std::fmt::LowerHex {
     let mut result = String::new();
     let _ = iter.fold((), |_, n| {
-        result.push_str(format!("{0:01$x}", n, T::WIDTH).as_str());
+        result.push_str(format!("{0:01$x}", n, std::mem::size_of::<T>() * 2).as_str());
     });
     result
 }
