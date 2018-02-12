@@ -85,7 +85,19 @@ fn solve_a(input : &str) -> u32 {
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let pdb = ProgDb::from_input(input);
+
+    let mut all_sets : Vec<HashSet<u32>> = vec![];
+
+    for prog in pdb.db.iter() {
+        if !all_sets.iter().any(|set| {
+            set.contains(&prog.name)
+        }) {
+            all_sets.push(pdb.find_all_connected(prog.name))
+        }
+    }
+
+    all_sets.len() as u32
 }
 
 fn main() {
@@ -153,8 +165,36 @@ r"0 <-> 1, 5
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_given() {
+        let input =
+r"0 <-> 2
+1 <-> 1
+2 <-> 0, 3, 4
+3 <-> 2, 4
+4 <-> 2, 3, 6
+5 <-> 6
+6 <-> 4, 5";
+        assert_eq!(solve_b(&input), 2);
+    }
+
+    #[test]
+    fn b_singles() {
+        let input =
+r"0 <-> 0
+1 <-> 1
+2 <-> 2";
+        assert_eq!(solve_b(&input), 3);
+    }
+
+    #[test]
+    fn b_pairs() {
+        let input =
+r"0 <-> 1
+1 <-> 0
+2 <-> 3
+3 <-> 2
+4 <-> 5
+5 <-> 4";
+        assert_eq!(solve_b(&input), 3);
     }
 }
