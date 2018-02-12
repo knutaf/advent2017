@@ -118,7 +118,11 @@ fn solve_a(input : &str) -> u32 {
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let mover = HexMover::new(input);
+
+    mover.map(|pos| {
+        HexSeeker::new(&pos).count() as u32
+    }).max().or(Some(0)).unwrap()
 }
 
 fn main() {
@@ -192,7 +196,8 @@ mod test {
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        assert_eq!(solve_b("ne,ne,sw,sw"), 2);
+        assert_eq!(solve_b("n,n,s,s,ne,ne,sw,sw"), 2);
+        assert_eq!(solve_b("ne,ne,sw,sw,n,n,s,s"), 2);
     }
 }
