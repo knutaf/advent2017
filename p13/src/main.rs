@@ -16,6 +16,7 @@ struct PacketPasser<'t> {
     firewall : std::slice::Iter<'t, Option<Layer>>,
     t : u32,
     cost : u32,
+    caught : bool,
 }
 
 impl Firewall {
@@ -42,12 +43,17 @@ impl Firewall {
         }
     }
 
-    fn simulate<'t>(&'t self) -> PacketPasser<'t> {
+    fn simulate<'t>(&'t self, start_t : u32) -> PacketPasser<'t> {
         PacketPasser {
             firewall : self.layers.iter(),
-            t : 0,
+            t : start_t,
             cost : 0,
+            caught : false,
         }
+    }
+
+    fn calculate_severity(&self, start_t : u32) -> u32 {
+        self.simulate(start_t).last().unwrap().0
     }
 
     fn wrap_scanner(t : u32, range : u32) -> u32 {
@@ -72,19 +78,20 @@ impl Firewall {
 }
 
 impl<'t> Iterator for PacketPasser<'t> {
-    type Item = u32;
+    type Item = (u32, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.firewall.next().map(|layer| {
             if let Some(layer) = layer.as_ref() {
                 if Firewall::wrap_scanner(self.t, layer.range) == 0 {
                     self.cost += layer.depth * layer.range;
+                    self.caught = true;
                 }
             }
 
             self.t += 1;
 
-            self.cost
+            (self.cost, self.caught)
         })
     }
 }
@@ -92,11 +99,17 @@ impl<'t> Iterator for PacketPasser<'t> {
 
 fn solve_a(input : &str) -> u32 {
     let firewall = Firewall::from(input);
-    firewall.simulate().inspect(|x| {eprintln!("{}", x);}).last().unwrap()
+    firewall.calculate_severity(0)
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let firewall = Firewall::from(input);
+
+    (0 .. u32::max_value()).find(|&start_t| {
+        !firewall.simulate(start_t).any(|(severity, caught)| {
+            caught
+        })
+    }).unwrap()
 }
 
 fn main() {
@@ -180,7 +193,11 @@ r"0: 1
 
     #[test]
     fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        let input =
+r"0: 3
+1: 2
+4: 4
+6: 4";
+        assert_eq!(solve_b(&input), 10);
     }
 }
