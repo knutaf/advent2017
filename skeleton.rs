@@ -1,3 +1,5 @@
+#![feature(nll)]
+
 extern crate aoclib;
 use aoclib::*;
 
