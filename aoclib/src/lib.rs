@@ -5,6 +5,7 @@
 use std::io::prelude::*;
 use std::env;
 pub mod list;
+pub mod knot_hash;
 
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
