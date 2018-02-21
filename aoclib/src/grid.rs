@@ -1,3 +1,5 @@
+use std;
+
 pub struct Grid<T> {
     grid : Vec<T>,
     size_x : usize,
@@ -39,6 +41,10 @@ impl<T> Grid<T> {
         let index = self.index_for_location(row, col);
         self.grid.get_mut(index)
     }
+
+    pub fn iter<'t>(&'t self) -> std::slice::Iter<'t, T> {
+        self.grid.iter()
+    }
 }
 
 #[cfg(test)]
@@ -48,7 +54,6 @@ mod test {
     #[test]
     fn simple() {
         let mut grid = Grid::<u32>::new(5);
-
         for row in 0 .. 5 {
             grid.add_row(vec![row, row + 1, row + 2, row + 3, row + 4]);
         }
@@ -58,5 +63,15 @@ mod test {
                 assert_eq!(*grid.get(row, col).unwrap(), (row + col) as u32);
             }
         }
+    }
+
+    #[test]
+    fn iter() {
+        let mut grid = Grid::<u32>::new(5);
+        for row in 0 .. 2 {
+            grid.add_row(vec![row, row + 1, row + 2, row + 3, row + 4]);
+        }
+
+        assert_eq!(grid.iter().map(|v| *v).collect::<Vec<u32>>(), vec![0, 1, 2, 3, 4, 1, 2, 3, 4, 5]);
     }
 }
