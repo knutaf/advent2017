@@ -5,6 +5,12 @@ pub struct Grid<T> {
     size_x : usize,
 }
 
+pub struct GridIterator<'t, T>
+where T : 't {
+    grid : &'t Grid<T>,
+    iter : std::iter::Enumerate<std::slice::Iter<'t, T>>,
+}
+
 impl<T> Grid<T> {
     pub fn new(size_x : usize) -> Grid<T> {
         Grid {
@@ -13,7 +19,11 @@ impl<T> Grid<T> {
         }
     }
 
-    pub fn num_rows(&self) -> usize {
+    pub fn size_x(&self) -> usize {
+        self.size_x
+    }
+
+    pub fn size_y(&self) -> usize {
         self.grid.len() / self.size_x
     }
 
@@ -25,25 +35,47 @@ impl<T> Grid<T> {
         }
     }
 
-    fn index_for_location(&self, row : usize, col : usize) -> usize {
-        if col < self.size_x {
-            (row * self.size_x) + col
+    fn index_for_location(&self, x : usize, y : usize) -> usize {
+        if x < self.size_x {
+            (y * self.size_x) + x
         } else {
             panic!("column out of range! needs < {}", self.size_x);
         }
     }
 
-    pub fn get(&self, row : usize, col : usize) -> Option<&T> {
-        self.grid.get(self.index_for_location(row, col))
+    fn location_for_index(&self, index : usize) -> (usize, usize) {
+        ((index % self.size_x), (index / self.size_x))
     }
 
-    pub fn get_mut(&mut self, row : usize, col : usize) -> Option<&mut T> {
-        let index = self.index_for_location(row, col);
+    pub fn get(&self, x : usize, y : usize) -> Option<&T> {
+        self.grid.get(self.index_for_location(x, y))
+    }
+
+    pub fn get_mut(&mut self, x : usize, y : usize) -> Option<&mut T> {
+        let index = self.index_for_location(x, y);
         self.grid.get_mut(index)
     }
 
     pub fn iter<'t>(&'t self) -> std::slice::Iter<'t, T> {
         self.grid.iter()
+    }
+
+    pub fn enumerate<'t>(&'t self) -> GridIterator<'t, T> {
+        GridIterator {
+            grid : self,
+            iter : self.grid.iter().enumerate(),
+        }
+    }
+}
+
+impl<'t, T> Iterator for GridIterator<'t, T>
+where T : 't {
+    type Item = ((usize, usize), &'t T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(index, value)| {
+            (self.grid.location_for_index(index), value)
+        })
     }
 }
 
@@ -73,5 +105,15 @@ mod test {
         }
 
         assert_eq!(grid.iter().map(|v| *v).collect::<Vec<u32>>(), vec![0, 1, 2, 3, 4, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn enumerate() {
+        let mut grid = Grid::<u32>::new(2);
+        for row in 0 .. 2 {
+            grid.add_row(vec![row, row + 1]);
+        }
+
+        assert_eq!(grid.enumerate().map(|(l, v)| (l, *v)).collect::<Vec<((usize, usize), u32)>>(), vec![((0, 0), 0), ((1, 0), 1), ((0, 1), 1), ((1, 1), 2)]);
     }
 }
