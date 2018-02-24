@@ -1,4 +1,5 @@
 #![feature(nll)]
+#![feature(universal_impl_trait)]
 
 #[macro_use] extern crate lazy_static;
 extern crate regex;
@@ -47,11 +48,7 @@ impl Iterator for Generator {
     }
 }
 
-fn count_matches_a(input : &str, num_rounds : usize) -> usize {
-    let mut lines = input.lines();
-    let mut gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR);
-    let mut gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR);
-
+fn count_matches(gen_a : impl Iterator<Item = u64>, gen_b : impl Iterator<Item = u64>, num_rounds : usize) -> usize {
     gen_a.zip(gen_b).take(num_rounds).inspect(|&(a, b)| {
         //eprintln!("a: {:x}, b: {:x}", a, b);
     }).filter(|&(a, b)| {
@@ -59,21 +56,24 @@ fn count_matches_a(input : &str, num_rounds : usize) -> usize {
     }).count()
 }
 
+fn count_matches_a(input : &str, num_rounds : usize) -> usize {
+    let mut lines = input.lines();
+    let gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR);
+    let gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR);
+    count_matches(gen_a, gen_b, num_rounds)
+}
+
 fn count_matches_b(input : &str, num_rounds : usize) -> usize {
     let mut lines = input.lines();
-    let mut gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR).filter(|num : &u64| {
+    let gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR).filter(|num : &u64| {
         (num % 4) == 0
     });
 
-    let mut gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR).filter(|num : &u64| {
+    let gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR).filter(|num : &u64| {
         (num % 8) == 0
     });
 
-    gen_a.zip(gen_b).take(num_rounds).inspect(|&(a, b)| {
-        //eprintln!("a: {:x}, b: {:x}", a, b);
-    }).filter(|&(a, b)| {
-        (a & COMPARISON_MASK) == (b & COMPARISON_MASK)
-    }).count()
+    count_matches(gen_a, gen_b, num_rounds)
 }
 
 fn solve_a(input : &str) -> usize {
