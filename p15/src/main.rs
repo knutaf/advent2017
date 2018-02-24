@@ -11,7 +11,8 @@ const GENERATOR_A_FACTOR : u32 = 16807;
 const GENERATOR_B_FACTOR : u32 = 48271;
 const GENERATE_MASK : u64 = 0x000000007FFFFFFF;
 const COMPARISON_MASK : u64 = 0xffff;
-const NUM_ROUNDS : u32 = 40000000;
+const NUM_ROUNDS_A : u32 = 40000000;
+const NUM_ROUNDS_B : u32 = 5000000;
 
 struct Generator {
     value : u64,
@@ -46,7 +47,7 @@ impl Iterator for Generator {
     }
 }
 
-fn count_matches(input : &str, num_rounds : usize) -> usize {
+fn count_matches_a(input : &str, num_rounds : usize) -> usize {
     let mut lines = input.lines();
     let mut gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR);
     let mut gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR);
@@ -58,12 +59,29 @@ fn count_matches(input : &str, num_rounds : usize) -> usize {
     }).count()
 }
 
-fn solve_a(input : &str) -> usize {
-    count_matches(input, NUM_ROUNDS as usize)
+fn count_matches_b(input : &str, num_rounds : usize) -> usize {
+    let mut lines = input.lines();
+    let mut gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR).filter(|num : &u64| {
+        (num % 4) == 0
+    });
+
+    let mut gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR).filter(|num : &u64| {
+        (num % 8) == 0
+    });
+
+    gen_a.zip(gen_b).take(num_rounds).inspect(|&(a, b)| {
+        //eprintln!("a: {:x}, b: {:x}", a, b);
+    }).filter(|&(a, b)| {
+        (a & COMPARISON_MASK) == (b & COMPARISON_MASK)
+    }).count()
 }
 
-fn solve_b(input : &str) -> u32 {
-    0
+fn solve_a(input : &str) -> usize {
+    count_matches_a(input, NUM_ROUNDS_A as usize)
+}
+
+fn solve_b(input : &str) -> usize {
+    count_matches_b(input, NUM_ROUNDS_B as usize)
 }
 
 fn main() {
@@ -82,11 +100,21 @@ mod test {
     use super::*;
 
     #[test]
-    fn count_matches_1() {
+    fn count_matches_a_1() {
         let input =
 r"Generator A starts with 65
 Generator B starts with 8921";
-        assert_eq!(count_matches(&input, 3), 1);
+        assert_eq!(count_matches_a(&input, 2), 0);
+        assert_eq!(count_matches_a(&input, 3), 1);
+    }
+
+    #[test]
+    fn count_matches_b_1() {
+        let input =
+r"Generator A starts with 65
+Generator B starts with 8921";
+        assert_eq!(count_matches_b(&input, 1055), 0);
+        assert_eq!(count_matches_b(&input, 1056), 1);
     }
 
     #[test]
@@ -98,8 +126,10 @@ Generator B starts with 8921";
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_given() {
+        let input =
+r"Generator A starts with 65
+Generator B starts with 8921";
+        assert_eq!(solve_b(&input), 309);
     }
 }
