@@ -9,7 +9,9 @@ use aoclib::*;
 
 const GENERATOR_A_FACTOR : u32 = 16807;
 const GENERATOR_B_FACTOR : u32 = 48271;
-const MASK : u64 = 0x000000007FFFFFFF;
+const GENERATE_MASK : u64 = 0x000000007FFFFFFF;
+const COMPARISON_MASK : u64 = 0xffff;
+const NUM_ROUNDS : u32 = 40000000;
 
 struct Generator {
     value : u64,
@@ -39,16 +41,25 @@ impl Iterator for Generator {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.value = (self.value * (self.factor as u64)) & MASK;
+        self.value = (self.value * (self.factor as u64)) % GENERATE_MASK;
         Some(self.value)
     }
 }
 
-fn solve_a(input : &str) -> u32 {
-    let generators : Vec<Generator> = input.lines().enumerate().map(|(i, line)| {
-        Generator::from(line, if i == 0 { GENERATOR_A_FACTOR } else { GENERATOR_B_FACTOR })
-    }).collect();
-    0
+fn count_matches(input : &str, num_rounds : usize) -> usize {
+    let mut lines = input.lines();
+    let mut gen_a = Generator::from(lines.next().unwrap(), GENERATOR_A_FACTOR);
+    let mut gen_b = Generator::from(lines.next().unwrap(), GENERATOR_B_FACTOR);
+
+    gen_a.zip(gen_b).take(num_rounds).inspect(|&(a, b)| {
+        //eprintln!("a: {:x}, b: {:x}", a, b);
+    }).filter(|&(a, b)| {
+        (a & COMPARISON_MASK) == (b & COMPARISON_MASK)
+    }).count()
+}
+
+fn solve_a(input : &str) -> usize {
+    count_matches(input, NUM_ROUNDS as usize)
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -71,11 +82,19 @@ mod test {
     use super::*;
 
     #[test]
-    fn a_1() {
+    fn count_matches_1() {
         let input =
 r"Generator A starts with 65
 Generator B starts with 8921";
-        assert_eq!(solve_a(&input), 0);
+        assert_eq!(count_matches(&input, 3), 1);
+    }
+
+    #[test]
+    fn a_given() {
+        let input =
+r"Generator A starts with 65
+Generator B starts with 8921";
+        assert_eq!(solve_a(&input), 588);
     }
 
     #[test]
