@@ -9,6 +9,8 @@ use regex::Regex;
 extern crate aoclib;
 use aoclib::*;
 
+const PART_A_NUM_DANCERS : u8 = 16;
+
 enum DanceMove<'t> {
     Spin(u32),
     Exchange(u32, u32),
@@ -21,7 +23,7 @@ struct Dance<'t> {
 
 struct Performance<'t> {
     dancers : Vec<String>,
-    step : std::slice::Iter<'t, DanceMove<'t>>,
+    steps : std::slice::Iter<'t, DanceMove<'t>>,
 }
 
 impl<'t> DanceMove<'t> {
@@ -55,9 +57,9 @@ impl<'t> fmt::Display for DanceMove<'t> {
 }
 
 impl<'t> Dance<'t> {
-    fn new(moves : &'t str) -> Dance<'t> {
+    fn from(moves : &'t str) -> Dance<'t> {
         Dance {
-            moves : moves.lines().map(DanceMove::from).collect(),
+            moves : moves.split(',').map(DanceMove::from).collect(),
         }
     }
 
@@ -66,22 +68,62 @@ impl<'t> Dance<'t> {
             dancers : (0 .. num_dancers).map(|i| {
                 String::from(((('a' as u8) + i) as char).to_string())
             }).collect(),
-            step : self.moves.iter(),
+            steps : self.moves.iter(),
         }
     }
 }
 
-impl<'t> Iterator for Dance<'t> {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        None
+impl<'t> Performance<'t> {
+    fn positions(&self) -> String {
+        let mut result = String::new();
+        for dancer in self.dancers.iter() {
+            result.push_str(dancer.as_str());
+        }
+        result
     }
 }
 
-fn solve_a(input : &str) -> u32 {
-    let dance = Dance::new(input);
-    0
+impl<'t> Iterator for Performance<'t> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.steps.next().map(|step| {
+            match step {
+                &DanceMove::Spin(count) => {
+                    for _ in 0 .. count {
+                        let end = self.dancers.pop().unwrap();
+                        self.dancers.insert(0, end);
+                    }
+                },
+                &DanceMove::Exchange(a, b) => {
+                    self.dancers.swap(a as usize, b as usize);
+                },
+                &DanceMove::Partner(a, b) => {
+                    let (a_pos, b_pos) = self.dancers.iter().enumerate().fold((None, None), |mut poses : (Option<usize>, Option<usize>), (i, item)| {
+                        if poses.0.is_none() && item == a {
+                            //eprintln!("found a ({}) at pos {}. item is {}", a, i, item);
+                            poses = (Some(i), poses.1);
+                        }
+
+                        if poses.1.is_none() && item == b {
+                            //eprintln!("found b ({}) at pos {}. item is {}", b, i, item);
+                            poses = (poses.0, Some(i));
+                        }
+
+                        poses
+                    });
+
+                    self.dancers.swap(a_pos.unwrap(), b_pos.unwrap());
+                },
+            };
+
+            self.positions()
+        })
+    }
+}
+
+fn solve_a(input : &str) -> String {
+    Dance::from(input).perform(PART_A_NUM_DANCERS).last().unwrap()
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -103,10 +145,36 @@ fn main() {
 mod test {
     use super::*;
 
+    fn test_dance(num_dancers : u8, moves : &str, expected_final_position : &str) {
+        let dance = Dance::from(moves);
+        assert_eq!(dance.perform(num_dancers).last().unwrap(), expected_final_position);
+    }
+
     #[test]
-    fn a_1() {
-        let input = "blah";
-        assert_eq!(solve_a(&input), 0);
+    fn spin() {
+        test_dance(5, "s1", "eabcd");
+        test_dance(5, "s2", "deabc");
+        test_dance(5, "s5", "abcde");
+        test_dance(5, "s10", "abcde");
+    }
+
+    #[test]
+    fn exchange() {
+        test_dance(5, "x0/1", "bacde");
+        test_dance(5, "x0/0", "abcde");
+        test_dance(5, "x0/4", "ebcda");
+    }
+
+    #[test]
+    fn partner() {
+        test_dance(5, "pa/b", "bacde");
+        test_dance(5, "pa/e", "ebcda");
+        test_dance(5, "pa/a", "abcde");
+    }
+
+    #[test]
+    fn a_given() {
+        test_dance(5, "s1,x3/4,pe/b", "baedc");
     }
 
     #[test]
