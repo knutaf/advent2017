@@ -23,7 +23,9 @@ struct Dance<'t> {
 
 struct Performance<'t> {
     dancers : Vec<String>,
-    steps : std::slice::Iter<'t, DanceMove<'t>>,
+    steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove<'t>>>,
+    num_steps : usize,
+    position : usize,
 }
 
 impl<'t> DanceMove<'t> {
@@ -64,12 +66,31 @@ impl<'t> Dance<'t> {
     }
 
     fn perform<'a>(&'a self, num_dancers : u8) -> Performance<'a> {
+        let moves = self.moves.iter();
+        let num_moves = moves.len();
+
         Performance {
             dancers : (0 .. num_dancers).map(|i| {
                 String::from(((('a' as u8) + i) as char).to_string())
             }).collect(),
-            steps : self.moves.iter(),
+            steps : moves.cycle(),
+            num_steps : num_moves,
+            position : 0,
         }
+    }
+
+    fn get_final_positions(&self, num_dancers : u8, num_times : u64) -> String {
+        let mut performance = self.perform(num_dancers);
+
+        let mut final_positions = performance.finish().unwrap();
+        //eprintln!("poses after 0: {}", final_positions);
+        for i in 1 .. num_times {
+            performance.rewind();
+            final_positions = performance.finish().unwrap();
+            //eprintln!("poses after {}: {}", i, final_positions);
+        }
+
+        final_positions
     }
 }
 
@@ -81,49 +102,68 @@ impl<'t> Performance<'t> {
         }
         result
     }
+
+    fn finish(&mut self) -> Option<String> {
+        let mut result = None;
+        while let Some(next) = self.next() {
+            eprintln!("step {}", next);
+            result = Some(next);
+        }
+        result
+    }
+
+    fn rewind(&mut self) {
+        self.position = 0;
+    }
 }
 
 impl<'t> Iterator for Performance<'t> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.steps.next().map(|step| {
-            match step {
-                &DanceMove::Spin(count) => {
-                    for _ in 0 .. count {
-                        let end = self.dancers.pop().unwrap();
-                        self.dancers.insert(0, end);
-                    }
-                },
-                &DanceMove::Exchange(a, b) => {
-                    self.dancers.swap(a as usize, b as usize);
-                },
-                &DanceMove::Partner(a, b) => {
-                    let (a_pos, b_pos) = self.dancers.iter().enumerate().fold((None, None), |mut poses : (Option<usize>, Option<usize>), (i, item)| {
-                        if poses.0.is_none() && item == a {
-                            //eprintln!("found a ({}) at pos {}. item is {}", a, i, item);
-                            poses = (Some(i), poses.1);
+        if self.position < self.num_steps {
+            self.position += 1;
+
+            self.steps.next().map(|step| {
+                match step {
+                    &DanceMove::Spin(count) => {
+                        for _ in 0 .. count {
+                            let end = self.dancers.pop().unwrap();
+                            self.dancers.insert(0, end);
                         }
+                    },
+                    &DanceMove::Exchange(a, b) => {
+                        self.dancers.swap(a as usize, b as usize);
+                    },
+                    &DanceMove::Partner(a, b) => {
+                        let (a_pos, b_pos) = self.dancers.iter().enumerate().fold((None, None), |mut poses : (Option<usize>, Option<usize>), (i, item)| {
+                            if poses.0.is_none() && item == a {
+                                //eprintln!("found a ({}) at pos {}. item is {}", a, i, item);
+                                poses = (Some(i), poses.1);
+                            }
 
-                        if poses.1.is_none() && item == b {
-                            //eprintln!("found b ({}) at pos {}. item is {}", b, i, item);
-                            poses = (poses.0, Some(i));
-                        }
+                            if poses.1.is_none() && item == b {
+                                //eprintln!("found b ({}) at pos {}. item is {}", b, i, item);
+                                poses = (poses.0, Some(i));
+                            }
 
-                        poses
-                    });
+                            poses
+                        });
 
-                    self.dancers.swap(a_pos.unwrap(), b_pos.unwrap());
-                },
-            };
+                        self.dancers.swap(a_pos.unwrap(), b_pos.unwrap());
+                    },
+                };
 
-            self.positions()
-        })
+                self.positions()
+            })
+        } else {
+            None
+        }
     }
 }
 
 fn solve_a(input : &str) -> String {
-    Dance::from(input).perform(PART_A_NUM_DANCERS).last().unwrap()
+    Dance::from(input).perform(PART_A_NUM_DANCERS).finish().unwrap()
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -145,9 +185,13 @@ fn main() {
 mod test {
     use super::*;
 
-    fn test_dance(num_dancers : u8, moves : &str, expected_final_position : &str) {
+    fn test_dance_repeat(num_dancers : u8, moves : &str, num_times : u64, expected_final_positions : &str) {
         let dance = Dance::from(moves);
-        assert_eq!(dance.perform(num_dancers).last().unwrap(), expected_final_position);
+        assert_eq!(dance.get_final_positions(num_dancers, num_times), expected_final_positions);
+    }
+
+    fn test_dance(num_dancers : u8, moves : &str, expected_final_position : &str) {
+        test_dance_repeat(num_dancers, moves, 1, expected_final_position)
     }
 
     #[test]
@@ -175,6 +219,11 @@ mod test {
     #[test]
     fn a_given() {
         test_dance(5, "s1,x3/4,pe/b", "baedc");
+    }
+
+    #[test]
+    fn b_given() {
+        test_dance_repeat(5, "s1,x3/4,pe/b", 2, "ceadb");
     }
 
     #[test]
