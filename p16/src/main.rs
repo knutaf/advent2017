@@ -21,7 +21,13 @@ struct Dance<'t> {
     moves : Vec<DanceMove<'t>>,
 }
 
-struct Performance<'t> {
+trait Performance : Iterator<Item = ()> {
+    fn positions(&self) -> String;
+    fn finish(&mut self) -> String;
+    fn rewind(&mut self);
+}
+
+struct PerformanceString<'t> {
     dancers : Vec<String>,
     steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove<'t>>>,
     num_steps : usize,
@@ -65,11 +71,11 @@ impl<'t> Dance<'t> {
         }
     }
 
-    fn perform<'a>(&'a self, num_dancers : u8) -> Performance<'a> {
+    fn perform<'a>(&'a self, num_dancers : u8) -> PerformanceString<'a> {
         let moves = self.moves.iter();
         let num_moves = moves.len();
 
-        Performance {
+        PerformanceString {
             dancers : (0 .. num_dancers).map(|i| {
                 String::from(((('a' as u8) + i) as char).to_string())
             }).collect(),
@@ -82,19 +88,22 @@ impl<'t> Dance<'t> {
     fn get_final_positions(&self, num_dancers : u8, num_times : u64) -> String {
         let mut performance = self.perform(num_dancers);
 
-        let mut final_positions = performance.finish().unwrap();
+        let mut final_positions = performance.finish();
         //eprintln!("poses after 0: {}", final_positions);
         for i in 1 .. num_times {
+            if (i % 10) == 0 {
+                eprintln!("poses after {}: {}", i, final_positions);
+            }
+
             performance.rewind();
-            final_positions = performance.finish().unwrap();
-            //eprintln!("poses after {}: {}", i, final_positions);
+            final_positions = performance.finish();
         }
 
         final_positions
     }
 }
 
-impl<'t> Performance<'t> {
+impl<'t> Performance for PerformanceString<'t> {
     fn positions(&self) -> String {
         let mut result = String::new();
         for dancer in self.dancers.iter() {
@@ -103,13 +112,10 @@ impl<'t> Performance<'t> {
         result
     }
 
-    fn finish(&mut self) -> Option<String> {
-        let mut result = None;
-        while let Some(next) = self.next() {
-            eprintln!("step {}", next);
-            result = Some(next);
+    fn finish(&mut self) -> String {
+        while self.next().is_some() {
         }
-        result
+        self.positions()
     }
 
     fn rewind(&mut self) {
@@ -117,8 +123,8 @@ impl<'t> Performance<'t> {
     }
 }
 
-impl<'t> Iterator for Performance<'t> {
-    type Item = String;
+impl<'t> Iterator for PerformanceString<'t> {
+    type Item = ();
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.position < self.num_steps {
@@ -153,8 +159,6 @@ impl<'t> Iterator for Performance<'t> {
                         self.dancers.swap(a_pos.unwrap(), b_pos.unwrap());
                     },
                 };
-
-                self.positions()
             })
         } else {
             None
@@ -163,11 +167,11 @@ impl<'t> Iterator for Performance<'t> {
 }
 
 fn solve_a(input : &str) -> String {
-    Dance::from(input).perform(PART_A_NUM_DANCERS).finish().unwrap()
+    Dance::from(input).get_final_positions(PART_A_NUM_DANCERS, 1)
 }
 
-fn solve_b(input : &str) -> u32 {
-    0
+fn solve_b(input : &str) -> String {
+    Dance::from(input).get_final_positions(PART_A_NUM_DANCERS, 1000000000)
 }
 
 fn main() {
@@ -229,6 +233,6 @@ mod test {
     #[test]
     fn b_1() {
         let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+        assert_eq!(solve_b(&input), "");
     }
 }
