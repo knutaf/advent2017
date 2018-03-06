@@ -234,7 +234,7 @@ impl<'t> PerformanceInt<'t> {
     }
 
     fn get_shift_for_position(position : u8) -> u32 {
-        ((NUM_DANCERS - position) * (BITS_PER_DANCER as u8)) as u32
+        ((NUM_DANCERS - 1 - position) * (BITS_PER_DANCER as u8)) as u32
     }
 
     fn get_dancer_at_position(&self, position : u8) -> u8 {
@@ -251,14 +251,13 @@ impl<'t> PerformanceInt<'t> {
         self.dancers = self.dancers &
             !(DANCER_MASK << Self::get_shift_for_position(position1)) &
             !(DANCER_MASK << Self::get_shift_for_position(position2)) |
-            (((dancer1 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position1)) as u64) |
-            (((dancer2 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position2)) as u64);
+            (((dancer1 as u64) & DANCER_MASK) << Self::get_shift_for_position(position1)) |
+            (((dancer2 as u64) & DANCER_MASK) << Self::get_shift_for_position(position2));
     }
 }
 
 impl<'t> Performance for PerformanceInt<'t> {
     fn positions(&self) -> String {
-        // TODO: eliminate closure if possible
         Self::dancers_to_string((0 .. NUM_DANCERS).map(|i| {
             self.get_dancer_at_position(i)
         }))
@@ -322,6 +321,11 @@ fn main() {
 mod test {
     use super::*;
 
+    fn test_dance_int_repeat(moves : &str, num_times : u64, expected_final_positions : &str) {
+        let dance = Dance::from(moves);
+        assert_eq!(dance.get_final_positions_int(num_times), expected_final_positions);
+    }
+
     fn test_dance_repeat(num_dancers : u8, moves : &str, num_times : u64, expected_final_positions : &str) {
         let dance = Dance::from(moves);
         assert_eq!(dance.get_final_positions(num_dancers, num_times), expected_final_positions);
@@ -340,6 +344,15 @@ mod test {
     }
 
     #[test]
+    fn spin_int() {
+        test_dance_int_repeat("s1", 1, "pabcdefghijklmno");
+        test_dance_int_repeat("s2", 1, "opabcdefghijklmn");
+        test_dance_int_repeat("s16", 1, "abcdefghijklmnop");
+        test_dance_int_repeat("s17", 1, "pabcdefghijklmno");
+        test_dance_int_repeat("s32", 1, "abcdefghijklmnop");
+    }
+
+    #[test]
     fn exchange() {
         test_dance(5, "x0/1", "bacde");
         test_dance(5, "x0/0", "abcde");
@@ -347,10 +360,30 @@ mod test {
     }
 
     #[test]
+    fn exchange_int() {
+        test_dance_int_repeat("x0/1", 1, "bacdefghijklmnop");
+        test_dance_int_repeat("x0/0", 1, "abcdefghijklmnop");
+        test_dance_int_repeat("x0/15", 1, "pbcdefghijklmnoa");
+    }
+
+    #[test]
     fn partner() {
         test_dance(5, "pa/b", "bacde");
         test_dance(5, "pa/e", "ebcda");
         test_dance(5, "pa/a", "abcde");
+    }
+
+    #[test]
+    fn partner_int() {
+        test_dance_int_repeat("pa/b", 1, "bacdefghijklmnop");
+        test_dance_int_repeat("pa/a", 1, "abcdefghijklmnop");
+        test_dance_int_repeat("pa/p", 1, "pbcdefghijklmnoa");
+    }
+
+    #[test]
+    fn simple_int_repeat() {
+        test_dance_int_repeat("s1,x0/1,pa/b", 2, "aopbcdefghijklmn");
+        test_dance_int_repeat("s1,x0/1,pa/b", 3, "bnopacdefghijklm");
     }
 
     #[test]
