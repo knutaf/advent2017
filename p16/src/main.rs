@@ -16,7 +16,7 @@ const DANCER_MASK : u64 = (1 << BITS_PER_DANCER) - 1;
 
 enum DanceMove {
     Spin(u32),
-    Exchange(u32, u32),
+    Exchange(u8, u8),
     Partner(u8, u8),
 }
 
@@ -34,12 +34,12 @@ trait Performance : Iterator<Item = ()> {
         self.positions()
     }
 
-    fn positions_to_string<'t>(dancers : impl Iterator<Item = &'t u8>) -> String
+    fn dancers_to_string<'t>(dancers : impl Iterator<Item = u8>) -> String
     {
         // TODO: try with map and collect
         let mut result = String::new();
         for dancer in dancers {
-            result.push(DanceMove::dancer_number_to_name(*dancer));
+            result.push(DanceMove::dancer_number_to_name(dancer));
         }
         result
     }
@@ -78,7 +78,7 @@ impl DanceMove {
         if let Some(captures) = RE_SPIN.captures_iter(input).next() {
             DanceMove::Spin(captures.get(1).unwrap().as_str().parse::<u32>().unwrap())
         } else if let Some(captures) = RE_EXCHANGE.captures_iter(input).next() {
-            DanceMove::Exchange(captures.get(1).unwrap().as_str().parse::<u32>().unwrap(), captures.get(2).unwrap().as_str().parse::<u32>().unwrap())
+            DanceMove::Exchange(captures.get(1).unwrap().as_str().parse::<u8>().unwrap(), captures.get(2).unwrap().as_str().parse::<u8>().unwrap())
         } else if let Some(captures) = RE_PARTNER.captures_iter(input).next() {
             DanceMove::Partner(Self::dancer_name_to_number(captures.get(1).unwrap().as_str()), Self::dancer_name_to_number(captures.get(2).unwrap().as_str()))
         } else {
@@ -113,8 +113,15 @@ impl Dance {
     }
 
     fn get_final_positions(&self, num_dancers : u8, num_times : u64) -> String {
-        let mut performance = self.perform(num_dancers);
+        Self::finish_performance(self.perform(num_dancers), num_times)
+    }
 
+    fn get_final_positions_int(&self, num_times : u64) -> String {
+        Self::finish_performance(self.perform_int(), num_times)
+    }
+
+    fn finish_performance<P>(mut performance : P, num_times : u64) -> String
+    where P : Performance {
         let mut final_positions = performance.finish();
         //eprintln!("poses after 0: {}", final_positions);
         for i in 1 .. num_times {
@@ -146,7 +153,7 @@ impl<'t> PerformanceString<'t> {
 
 impl<'t> Performance for PerformanceString<'t> {
     fn positions(&self) -> String {
-        Self::positions_to_string(self.dancers.iter())
+        Self::dancers_to_string(self.dancers.iter().map(|x| *x))
     }
 
     fn rewind(&mut self) {
@@ -226,26 +233,39 @@ impl<'t> PerformanceInt<'t> {
         }
     }
 
-    fn get_shift_for_position(position : u32) -> u32 {
-        (((NUM_DANCERS as u32) - position) * (BITS_PER_DANCER as u32))
+    fn get_shift_for_position(position : u8) -> u32 {
+        ((NUM_DANCERS - position) * (BITS_PER_DANCER as u8)) as u32
     }
 
-    fn get_dancer_at_position(&self, position : u32) -> u8 {
+    fn get_dancer_at_position(&self, position : u8) -> u8 {
         ((self.dancers >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
     }
 
-    fn get_position_of_dancer(&self, dancer : u8) -> u32 {
-        (0 .. (NUM_DANCERS as u32)).find(|position| {
+    fn get_position_of_dancer(&self, dancer : u8) -> u8 {
+        (0 .. NUM_DANCERS).find(|position| {
             self.get_dancer_at_position(*position) == dancer
         }).unwrap()
     }
 
-    fn set_dancers_at_positions(&mut self, position1 : u32, dancer1 : u8, position2 : u32, dancer2 : u8) {
+    fn set_dancers_at_positions(&mut self, position1 : u8, dancer1 : u8, position2 : u8, dancer2 : u8) {
         self.dancers = self.dancers &
             !(DANCER_MASK << Self::get_shift_for_position(position1)) &
             !(DANCER_MASK << Self::get_shift_for_position(position2)) |
             (((dancer1 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position1)) as u64) |
             (((dancer2 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position2)) as u64);
+    }
+}
+
+impl<'t> Performance for PerformanceInt<'t> {
+    fn positions(&self) -> String {
+        // TODO: eliminate closure if possible
+        Self::dancers_to_string((0 .. NUM_DANCERS).map(|i| {
+            self.get_dancer_at_position(i)
+        }))
+    }
+
+    fn rewind(&mut self) {
+        self.position = 0;
     }
 }
 
