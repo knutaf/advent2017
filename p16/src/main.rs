@@ -1,4 +1,5 @@
 #![feature(nll)]
+#![feature(universal_impl_trait)]
 
 use std::fmt;
 
@@ -9,33 +10,65 @@ use regex::Regex;
 extern crate aoclib;
 use aoclib::*;
 
-const PART_A_NUM_DANCERS : u8 = 16;
+const NUM_DANCERS : u8 = 16;
+const BITS_PER_DANCER : u64 = 4;
+const DANCER_MASK : u64 = (1 << BITS_PER_DANCER) - 1;
 
-enum DanceMove<'t> {
+enum DanceMove {
     Spin(u32),
     Exchange(u32, u32),
-    Partner(&'t str, &'t str),
+    Partner(u8, u8),
 }
 
-struct Dance<'t> {
-    moves : Vec<DanceMove<'t>>,
+struct Dance {
+    moves : Vec<DanceMove>,
 }
 
 trait Performance : Iterator<Item = ()> {
     fn positions(&self) -> String;
-    fn finish(&mut self) -> String;
     fn rewind(&mut self);
+
+    fn finish(&mut self) -> String {
+        while self.next().is_some() {
+        }
+        self.positions()
+    }
+
+    fn positions_to_string<'t>(dancers : impl Iterator<Item = &'t u8>) -> String
+    {
+        // TODO: try with map and collect
+        let mut result = String::new();
+        for dancer in dancers {
+            result.push(DanceMove::dancer_number_to_name(*dancer));
+        }
+        result
+    }
 }
 
 struct PerformanceString<'t> {
-    dancers : Vec<String>,
-    steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove<'t>>>,
+    dancers : Vec<u8>,
+    steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove>>,
     num_steps : usize,
     position : usize,
 }
 
-impl<'t> DanceMove<'t> {
-    fn from(input : &'t str) -> DanceMove<'t> {
+struct PerformanceInt<'t> {
+    dancers : u64,
+    steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove>>,
+    num_steps : usize,
+    position : usize,
+}
+
+impl DanceMove {
+    fn dancer_name_to_number(dancer : &str) -> u8 {
+        dancer.bytes().nth(0).unwrap() - ('a' as u8)
+    }
+
+    fn dancer_number_to_name(dancer : u8) -> char {
+        (('a' as u8) + dancer) as char
+    }
+
+    fn from(input : &str) -> DanceMove {
         lazy_static! {
             static ref RE_SPIN : regex::Regex = Regex::new(r"^s(\d+)$").expect("failed to compile regex");
             static ref RE_EXCHANGE : regex::Regex = Regex::new(r"^x(\d+)/(\d+)$").expect("failed to compile regex");
@@ -47,42 +80,36 @@ impl<'t> DanceMove<'t> {
         } else if let Some(captures) = RE_EXCHANGE.captures_iter(input).next() {
             DanceMove::Exchange(captures.get(1).unwrap().as_str().parse::<u32>().unwrap(), captures.get(2).unwrap().as_str().parse::<u32>().unwrap())
         } else if let Some(captures) = RE_PARTNER.captures_iter(input).next() {
-            DanceMove::Partner(captures.get(1).unwrap().as_str(), captures.get(2).unwrap().as_str())
+            DanceMove::Partner(Self::dancer_name_to_number(captures.get(1).unwrap().as_str()), Self::dancer_name_to_number(captures.get(2).unwrap().as_str()))
         } else {
             panic!("invalid move {}", input);
         }
     }
 }
 
-impl<'t> fmt::Display for DanceMove<'t> {
+impl fmt::Display for DanceMove {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             &DanceMove::Spin(a) => write!(f, "s{}", a),
             &DanceMove::Exchange(a, b) => write!(f, "x{}/{}", a, b),
-            &DanceMove::Partner(a, b) => write!(f, "p{}/{}", a, b),
+            &DanceMove::Partner(a, b) => write!(f, "p{}/{}", Self::dancer_number_to_name(a), Self::dancer_number_to_name(b)),
         }
     }
 }
 
-impl<'t> Dance<'t> {
-    fn from(moves : &'t str) -> Dance<'t> {
+impl Dance {
+    fn from(moves : &str) -> Dance {
         Dance {
             moves : moves.split(',').map(DanceMove::from).collect(),
         }
     }
 
-    fn perform<'a>(&'a self, num_dancers : u8) -> PerformanceString<'a> {
-        let moves = self.moves.iter();
-        let num_moves = moves.len();
+    fn perform(&self, num_dancers : u8) -> PerformanceString {
+        PerformanceString::new(&self.moves, num_dancers)
+    }
 
-        PerformanceString {
-            dancers : (0 .. num_dancers).map(|i| {
-                String::from(((('a' as u8) + i) as char).to_string())
-            }).collect(),
-            steps : moves.cycle(),
-            num_steps : num_moves,
-            position : 0,
-        }
+    fn perform_int(&self) -> PerformanceInt {
+        PerformanceInt::new(&self.moves)
     }
 
     fn get_final_positions(&self, num_dancers : u8, num_times : u64) -> String {
@@ -103,19 +130,23 @@ impl<'t> Dance<'t> {
     }
 }
 
+impl<'t> PerformanceString<'t> {
+    fn new(moves : &'t Vec<DanceMove>, num_dancers : u8) -> PerformanceString<'t> {
+        let moves_iter = moves.iter();
+        let num_moves = moves.len();
+
+        PerformanceString {
+            dancers : (0u8 .. num_dancers).collect(),
+            steps : moves_iter.cycle(),
+            num_steps : num_moves,
+            position : 0,
+        }
+    }
+}
+
 impl<'t> Performance for PerformanceString<'t> {
     fn positions(&self) -> String {
-        let mut result = String::new();
-        for dancer in self.dancers.iter() {
-            result.push_str(dancer.as_str());
-        }
-        result
-    }
-
-    fn finish(&mut self) -> String {
-        while self.next().is_some() {
-        }
-        self.positions()
+        Self::positions_to_string(self.dancers.iter())
     }
 
     fn rewind(&mut self) {
@@ -143,12 +174,12 @@ impl<'t> Iterator for PerformanceString<'t> {
                     },
                     &DanceMove::Partner(a, b) => {
                         let (a_pos, b_pos) = self.dancers.iter().enumerate().fold((None, None), |mut poses : (Option<usize>, Option<usize>), (i, item)| {
-                            if poses.0.is_none() && item == a {
+                            if poses.0.is_none() && *item == a {
                                 //eprintln!("found a ({}) at pos {}. item is {}", a, i, item);
                                 poses = (Some(i), poses.1);
                             }
 
-                            if poses.1.is_none() && item == b {
+                            if poses.1.is_none() && *item == b {
                                 //eprintln!("found b ({}) at pos {}. item is {}", b, i, item);
                                 poses = (poses.0, Some(i));
                             }
@@ -166,12 +197,94 @@ impl<'t> Iterator for PerformanceString<'t> {
     }
 }
 
+impl<'t> PerformanceInt<'t> {
+    fn new(moves : &'t Vec<DanceMove>) -> PerformanceInt<'t> {
+        let moves_iter = moves.iter();
+        let num_moves = moves.len();
+
+        PerformanceInt {
+            dancers :
+                15 << (0 * BITS_PER_DANCER) |
+                14 << (1 * BITS_PER_DANCER) |
+                13 << (2 * BITS_PER_DANCER) |
+                12 << (3 * BITS_PER_DANCER) |
+                11 << (4 * BITS_PER_DANCER) |
+                10 << (5 * BITS_PER_DANCER) |
+                9 << (6 * BITS_PER_DANCER) |
+                8 << (7 * BITS_PER_DANCER) |
+                7 << (8 * BITS_PER_DANCER) |
+                6 << (9 * BITS_PER_DANCER) |
+                5 << (10 * BITS_PER_DANCER) |
+                4 << (11 * BITS_PER_DANCER) |
+                3 << (12 * BITS_PER_DANCER) |
+                2 << (13 * BITS_PER_DANCER) |
+                1 << (14 * BITS_PER_DANCER) |
+                0 << (15 * BITS_PER_DANCER),
+            steps : moves_iter.cycle(),
+            num_steps : num_moves,
+            position : 0,
+        }
+    }
+
+    fn get_shift_for_position(position : u32) -> u32 {
+        (((NUM_DANCERS as u32) - position) * (BITS_PER_DANCER as u32))
+    }
+
+    fn get_dancer_at_position(&self, position : u32) -> u8 {
+        ((self.dancers >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
+    }
+
+    fn get_position_of_dancer(&self, dancer : u8) -> u32 {
+        (0 .. (NUM_DANCERS as u32)).find(|position| {
+            self.get_dancer_at_position(*position) == dancer
+        }).unwrap()
+    }
+
+    fn set_dancers_at_positions(&mut self, position1 : u32, dancer1 : u8, position2 : u32, dancer2 : u8) {
+        self.dancers = self.dancers &
+            !(DANCER_MASK << Self::get_shift_for_position(position1)) &
+            !(DANCER_MASK << Self::get_shift_for_position(position2)) |
+            (((dancer1 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position1)) as u64) |
+            (((dancer2 & (DANCER_MASK as u8)) << Self::get_shift_for_position(position2)) as u64);
+    }
+}
+
+impl<'t> Iterator for PerformanceInt<'t> {
+    type Item = ();
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.position < self.num_steps {
+            self.position += 1;
+
+            self.steps.next().map(|step| {
+                match step {
+                    &DanceMove::Spin(count) => {
+                        self.dancers = self.dancers.rotate_right(count * (BITS_PER_DANCER as u32));
+                    },
+                    &DanceMove::Exchange(a, b) => {
+                        let dancer_a = self.get_dancer_at_position(a);
+                        let dancer_b = self.get_dancer_at_position(b);
+                        self.set_dancers_at_positions(a, dancer_b, b, dancer_a);
+                    },
+                    &DanceMove::Partner(a, b) => {
+                        let a_pos = self.get_position_of_dancer(a);
+                        let b_pos = self.get_position_of_dancer(b);
+                        self.set_dancers_at_positions(a_pos, b, b_pos, a);
+                    },
+                };
+            })
+        } else {
+            None
+        }
+    }
+}
+
 fn solve_a(input : &str) -> String {
-    Dance::from(input).get_final_positions(PART_A_NUM_DANCERS, 1)
+    Dance::from(input).get_final_positions(NUM_DANCERS, 1)
 }
 
 fn solve_b(input : &str) -> String {
-    Dance::from(input).get_final_positions(PART_A_NUM_DANCERS, 1000000000)
+    Dance::from(input).get_final_positions(NUM_DANCERS, 1000000000)
 }
 
 fn main() {
