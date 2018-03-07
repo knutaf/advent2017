@@ -2,6 +2,8 @@
 #![feature(universal_impl_trait)]
 
 use std::fmt;
+use std::time;
+use std::time::Instant;
 
 #[macro_use] extern crate lazy_static;
 extern crate regex;
@@ -55,8 +57,7 @@ struct PerformanceString<'t> {
 struct PerformanceInt<'t> {
     // packed array, where each slot is the dancer number at that position
     dancer_at_position : u64,
-    steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove>>,
-    num_steps : usize,
+    steps : &'t Vec<DanceMove>,
     position : usize,
 }
 
@@ -124,10 +125,22 @@ impl Dance {
     fn finish_performance<P>(mut performance : P, num_times : u64) -> String
     where P : Performance {
         let mut final_positions = performance.finish();
+
+        const OUTPUT_ITERATIONS : u64 = 10000;
+        let mut iteration_counter = 0;
+        let mut period_time = Instant::now();
+
         //eprintln!("poses after 0: {}", final_positions);
         for i in 1 .. num_times {
-            if (i % 10000) == 0 {
-                eprintln!("poses after {}: {}", i, final_positions);
+            iteration_counter += 1;
+            if iteration_counter == OUTPUT_ITERATIONS {
+                let elapsed = period_time.elapsed();
+                let elapsed_ms = ((elapsed.as_secs() * 1000) as u32) + (elapsed.subsec_nanos() / 1000000);
+
+                eprintln!("poses after {}: {}. {} iterations per sec", i, final_positions, ((OUTPUT_ITERATIONS * 1000) as f32) / elapsed_ms as f32);
+
+                iteration_counter = 0;
+                period_time = Instant::now();
             }
 
             performance.rewind();
@@ -207,8 +220,6 @@ impl<'t> Iterator for PerformanceString<'t> {
 
 impl<'t> PerformanceInt<'t> {
     fn new(moves : &'t Vec<DanceMove>) -> PerformanceInt<'t> {
-        let moves_iter = moves.iter();
-        let num_moves = moves.len();
         let dancers_init : u64 =
             15 << (0 * BITS_PER_DANCER) |
             14 << (1 * BITS_PER_DANCER) |
@@ -229,8 +240,7 @@ impl<'t> PerformanceInt<'t> {
 
         PerformanceInt {
             dancer_at_position : dancers_init,
-            steps : moves_iter.cycle(),
-            num_steps : num_moves,
+            steps : &moves,
             position : 0,
         }
     }
@@ -281,26 +291,25 @@ impl<'t> Iterator for PerformanceInt<'t> {
     type Item = ();
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.position < self.num_steps {
-            self.position += 1;
+        if self.position < self.steps.len() {
+            match self.steps[self.position] {
+                DanceMove::Spin(count) => {
+                    self.dancer_at_position = self.dancer_at_position.rotate_right(count * (BITS_PER_DANCER as u32));
+                },
+                DanceMove::Exchange(a, b) => {
+                    let dancer_a = self.get_dancer_at_position(a);
+                    let dancer_b = self.get_dancer_at_position(b);
+                    self.set_dancers_at_positions(a, dancer_b, b, dancer_a);
+                },
+                DanceMove::Partner(a, b) => {
+                    let a_pos = self.get_position_of_dancer(a);
+                    let b_pos = self.get_position_of_dancer(b);
+                    self.set_dancers_at_positions(a_pos, b, b_pos, a);
+                },
+            };
 
-            self.steps.next().map(|step| {
-                match step {
-                    &DanceMove::Spin(count) => {
-                        self.dancer_at_position = self.dancer_at_position.rotate_right(count * (BITS_PER_DANCER as u32));
-                    },
-                    &DanceMove::Exchange(a, b) => {
-                        let dancer_a = self.get_dancer_at_position(a);
-                        let dancer_b = self.get_dancer_at_position(b);
-                        self.set_dancers_at_positions(a, dancer_b, b, dancer_a);
-                    },
-                    &DanceMove::Partner(a, b) => {
-                        let a_pos = self.get_position_of_dancer(a);
-                        let b_pos = self.get_position_of_dancer(b);
-                        self.set_dancers_at_positions(a_pos, b, b_pos, a);
-                    },
-                };
-            })
+            self.position += 1;
+            Some(())
         } else {
             None
         }
