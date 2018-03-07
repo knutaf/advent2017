@@ -53,7 +53,8 @@ struct PerformanceString<'t> {
 }
 
 struct PerformanceInt<'t> {
-    dancers : u64,
+    // packed array, where each slot is the dancer number at that position
+    dancer_at_position : u64,
     steps : std::iter::Cycle<std::slice::Iter<'t, DanceMove>>,
     num_steps : usize,
     position : usize,
@@ -125,7 +126,7 @@ impl Dance {
         let mut final_positions = performance.finish();
         //eprintln!("poses after 0: {}", final_positions);
         for i in 1 .. num_times {
-            if (i % 10) == 0 {
+            if (i % 10000) == 0 {
                 eprintln!("poses after {}: {}", i, final_positions);
             }
 
@@ -208,25 +209,26 @@ impl<'t> PerformanceInt<'t> {
     fn new(moves : &'t Vec<DanceMove>) -> PerformanceInt<'t> {
         let moves_iter = moves.iter();
         let num_moves = moves.len();
+        let dancers_init : u64 =
+            15 << (0 * BITS_PER_DANCER) |
+            14 << (1 * BITS_PER_DANCER) |
+            13 << (2 * BITS_PER_DANCER) |
+            12 << (3 * BITS_PER_DANCER) |
+            11 << (4 * BITS_PER_DANCER) |
+            10 << (5 * BITS_PER_DANCER) |
+            9 << (6 * BITS_PER_DANCER) |
+            8 << (7 * BITS_PER_DANCER) |
+            7 << (8 * BITS_PER_DANCER) |
+            6 << (9 * BITS_PER_DANCER) |
+            5 << (10 * BITS_PER_DANCER) |
+            4 << (11 * BITS_PER_DANCER) |
+            3 << (12 * BITS_PER_DANCER) |
+            2 << (13 * BITS_PER_DANCER) |
+            1 << (14 * BITS_PER_DANCER) |
+            0 << (15 * BITS_PER_DANCER);
 
         PerformanceInt {
-            dancers :
-                15 << (0 * BITS_PER_DANCER) |
-                14 << (1 * BITS_PER_DANCER) |
-                13 << (2 * BITS_PER_DANCER) |
-                12 << (3 * BITS_PER_DANCER) |
-                11 << (4 * BITS_PER_DANCER) |
-                10 << (5 * BITS_PER_DANCER) |
-                9 << (6 * BITS_PER_DANCER) |
-                8 << (7 * BITS_PER_DANCER) |
-                7 << (8 * BITS_PER_DANCER) |
-                6 << (9 * BITS_PER_DANCER) |
-                5 << (10 * BITS_PER_DANCER) |
-                4 << (11 * BITS_PER_DANCER) |
-                3 << (12 * BITS_PER_DANCER) |
-                2 << (13 * BITS_PER_DANCER) |
-                1 << (14 * BITS_PER_DANCER) |
-                0 << (15 * BITS_PER_DANCER),
+            dancer_at_position : dancers_init,
             steps : moves_iter.cycle(),
             num_steps : num_moves,
             position : 0,
@@ -238,17 +240,24 @@ impl<'t> PerformanceInt<'t> {
     }
 
     fn get_dancer_at_position(&self, position : u8) -> u8 {
-        ((self.dancers >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
+        ((self.dancer_at_position >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
     }
 
     fn get_position_of_dancer(&self, dancer : u8) -> u8 {
-        (0 .. NUM_DANCERS).find(|position| {
-            self.get_dancer_at_position(*position) == dancer
-        }).unwrap()
+        let mut position = 0;
+        while position < NUM_DANCERS {
+            if self.get_dancer_at_position(position) == dancer {
+                return position;
+            }
+
+            position += 1;
+        }
+
+        panic!("couldn't find position for dancer {}", dancer);
     }
 
     fn set_dancers_at_positions(&mut self, position1 : u8, dancer1 : u8, position2 : u8, dancer2 : u8) {
-        self.dancers = self.dancers &
+        self.dancer_at_position = self.dancer_at_position &
             !(DANCER_MASK << Self::get_shift_for_position(position1)) &
             !(DANCER_MASK << Self::get_shift_for_position(position2)) |
             (((dancer1 as u64) & DANCER_MASK) << Self::get_shift_for_position(position1)) |
@@ -278,7 +287,7 @@ impl<'t> Iterator for PerformanceInt<'t> {
             self.steps.next().map(|step| {
                 match step {
                     &DanceMove::Spin(count) => {
-                        self.dancers = self.dancers.rotate_right(count * (BITS_PER_DANCER as u32));
+                        self.dancer_at_position = self.dancer_at_position.rotate_right(count * (BITS_PER_DANCER as u32));
                     },
                     &DanceMove::Exchange(a, b) => {
                         let dancer_a = self.get_dancer_at_position(a);
@@ -303,7 +312,7 @@ fn solve_a(input : &str) -> String {
 }
 
 fn solve_b(input : &str) -> String {
-    Dance::from(input).get_final_positions(NUM_DANCERS, 1000000000)
+    Dance::from(input).get_final_positions_int(1000000000)
 }
 
 fn main() {
@@ -394,11 +403,5 @@ mod test {
     #[test]
     fn b_given() {
         test_dance_repeat(5, "s1,x3/4,pe/b", 2, "ceadb");
-    }
-
-    #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), "");
     }
 }
