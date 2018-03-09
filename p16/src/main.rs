@@ -2,8 +2,8 @@
 #![feature(universal_impl_trait)]
 
 use std::fmt;
-use std::time;
 use std::time::Instant;
+use std::collections::HashMap;
 
 #[macro_use] extern crate lazy_static;
 extern crate regex;
@@ -16,6 +16,7 @@ const NUM_DANCERS : u8 = 16;
 const BITS_PER_DANCER : u64 = 4;
 const DANCER_MASK : u64 = (1 << BITS_PER_DANCER) - 1;
 
+#[derive(PartialEq)]
 enum DanceMove {
     Spin(u32),
     Exchange(u8, u8),
@@ -24,9 +25,10 @@ enum DanceMove {
 
 struct Dance {
     moves : Vec<DanceMove>,
+    multiplier : u32,
 }
 
-trait Performance : Iterator<Item = ()> {
+trait Performance : Iterator {
     fn positions(&self) -> String;
     fn rewind(&mut self);
 
@@ -102,7 +104,15 @@ impl fmt::Display for DanceMove {
 impl Dance {
     fn from(moves : &str) -> Dance {
         Dance {
-            moves : moves.split(',').map(DanceMove::from).collect(),
+            moves : moves.split(',').map(DanceMove::from).filter(|step| {
+                // Omit moves that do nothing
+                match step {
+                    &DanceMove::Spin(a) => a != 0,
+                    &DanceMove::Exchange(a, b) => a != b,
+                    &DanceMove::Partner(a, b) => a != b,
+                }
+            }).collect(),
+            multiplier : 1,
         }
     }
 
@@ -148,6 +158,47 @@ impl Dance {
         }
 
         final_positions
+    }
+
+    fn find_removable_ranges(&self) -> Vec<(usize, usize)> {
+        let performance = self.perform_int();
+        let mut history : HashMap<u64, (usize, Option<usize>)> = HashMap::new();
+
+        history.insert(performance.dancer_at_position, (0, None));
+        for (i, dancers) in performance.enumerate() {
+            let i = i + 1;
+            if let Some(poses) = history.get_mut(&dancers) {
+                poses.1 = Some(i);
+                eprintln!("found {:016x} at {} and {}. range: {}", dancers, poses.0, i, i - poses.0);
+            } else {
+                history.insert(dancers, (i, None));
+            }
+        }
+
+        history.values().filter_map(|&(start, end_opt)| {
+            end_opt.map(|end| {
+                (start, end)
+            })
+        }).collect()
+    }
+
+    fn refine(&mut self) -> bool {
+        let removable_ranges = self.find_removable_ranges();
+        let made_change = !removable_ranges.is_empty();
+
+        for (start, end) in removable_ranges {
+            for i in start .. end {
+                self.moves[i] = DanceMove::Spin(0);
+            }
+        }
+
+        eprintln!("before: {} moves", self.moves.len());
+        self.moves.retain(|step| {
+            *step != DanceMove::Spin(0)
+        });
+        eprintln!("after: {} moves", self.moves.len());
+
+        made_change
     }
 }
 
@@ -288,7 +339,7 @@ impl<'t> Performance for PerformanceInt<'t> {
 }
 
 impl<'t> Iterator for PerformanceInt<'t> {
-    type Item = ();
+    type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.position < self.steps.len() {
@@ -309,7 +360,7 @@ impl<'t> Iterator for PerformanceInt<'t> {
             };
 
             self.position += 1;
-            Some(())
+            Some(self.dancer_at_position)
         } else {
             None
         }
@@ -317,11 +368,22 @@ impl<'t> Iterator for PerformanceInt<'t> {
 }
 
 fn solve_a(input : &str) -> String {
-    Dance::from(input).get_final_positions(NUM_DANCERS, 1)
+    let mut dance = Dance::from(input);
+    let before = dance.get_final_positions(NUM_DANCERS, 1);
+
+    dance.refine();
+
+    let after = dance.get_final_positions(NUM_DANCERS, 1);
+
+    eprintln!("compare: {} and {}", before, after);
+    before
 }
 
 fn solve_b(input : &str) -> String {
-    Dance::from(input).get_final_positions_int(1000000000)
+    let mut dance = Dance::from(input);
+    dance.refine();
+    String::new()
+    //dance.get_final_positions_int(1000000000)
 }
 
 fn main() {
@@ -402,6 +464,15 @@ mod test {
     fn simple_int_repeat() {
         test_dance_int_repeat("s1,x0/1,pa/b", 2, "aopbcdefghijklmn");
         test_dance_int_repeat("s1,x0/1,pa/b", 3, "bnopacdefghijklm");
+    }
+
+    #[test]
+    fn refine_1() {
+        let mut dance = Dance::from("s2,s15,s1,s1");
+        assert_eq!(dance.get_final_positions_int(1), "nopabcdefghijklm");
+
+        dance.refine();
+        assert_eq!(dance.get_final_positions_int(1), "nopabcdefghijklm");
     }
 
     #[test]
