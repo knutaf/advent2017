@@ -15,8 +15,9 @@ use aoclib::*;
 const NUM_DANCERS : u8 = 16;
 const BITS_PER_DANCER : u64 = 4;
 const DANCER_MASK : u64 = (1 << BITS_PER_DANCER) - 1;
+const REFINE_MULTIPLIER : u32 = 10;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum DanceMove {
     Spin(u32),
     Exchange(u8, u8),
@@ -161,34 +162,60 @@ impl Dance {
     }
 
     fn find_removable_ranges(&self) -> Vec<(usize, usize)> {
-        let performance = self.perform_int();
         let mut history : HashMap<u64, (usize, Option<usize>)> = HashMap::new();
+
+        let performance = self.perform_int();
 
         history.insert(performance.dancer_at_position, (0, None));
         for (i, dancers) in performance.enumerate() {
             let i = i + 1;
             if let Some(poses) = history.get_mut(&dancers) {
                 poses.1 = Some(i);
-                eprintln!("found {:016x} at {} and {}. range: {}", dancers, poses.0, i, i - poses.0);
+                eprintln!("{}: {:016x} previously at {}. range: {}", i, dancers, poses.0, i - poses.0);
             } else {
+                eprintln!("{}: {:016x}", i, dancers);
                 history.insert(dancers, (i, None));
             }
         }
 
-        history.values().filter_map(|&(start, end_opt)| {
+        let mut ranges : Vec<(usize, usize)> = history.values().filter_map(|&(start, end_opt)| {
             end_opt.map(|end| {
                 (start, end)
             })
-        }).collect()
+        }).collect();
+
+        ranges.sort_unstable_by(|&(start1, end1), &(start2, end2)| {
+            if start1 == start2 {
+                (end1 - start1).cmp(&(end2 - start2))
+            } else {
+                start1.cmp(&start2)
+            }
+        });
+
+        ranges
     }
 
     fn refine(&mut self) -> bool {
+        eprintln!("before multiply: {} moves", self.moves.len());
+        self.multiplier *= REFINE_MULTIPLIER;
+        let old_moves = self.moves.clone();
+        for _ in 0 .. (REFINE_MULTIPLIER - 1) {
+            self.moves.extend(old_moves.iter().cloned());
+        }
+        eprintln!("after multiply: {} moves", self.moves.len());
+        for (i, step) in self.moves.iter().enumerate() {
+            eprintln!("{}:    {}", i + 1, step);
+        }
+
         let removable_ranges = self.find_removable_ranges();
         let made_change = !removable_ranges.is_empty();
 
         for (start, end) in removable_ranges {
-            for i in start .. end {
-                self.moves[i] = DanceMove::Spin(0);
+            if self.moves[start] != DanceMove::Spin(0) {
+                for i in start .. end {
+                    eprintln!("{}: {} -> s0", i, self.moves[i]);
+                    self.moves[i] = DanceMove::Spin(0);
+                }
             }
         }
 
@@ -197,6 +224,9 @@ impl Dance {
             *step != DanceMove::Spin(0)
         });
         eprintln!("after: {} moves", self.moves.len());
+        for (i, step) in self.moves.iter().enumerate() {
+            eprintln!("{}:    {}", i, step);
+        }
 
         made_change
     }
@@ -469,10 +499,10 @@ mod test {
     #[test]
     fn refine_1() {
         let mut dance = Dance::from("s2,s15,s1,s1");
-        assert_eq!(dance.get_final_positions_int(1), "nopabcdefghijklm");
+        let expected_final_positions = dance.get_final_positions_int(REFINE_MULTIPLIER as u64);
 
         dance.refine();
-        assert_eq!(dance.get_final_positions_int(1), "nopabcdefghijklm");
+        assert_eq!(dance.get_final_positions_int(1), expected_final_positions);
     }
 
     #[test]
