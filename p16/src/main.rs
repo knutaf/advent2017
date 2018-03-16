@@ -162,6 +162,17 @@ impl Dance {
         final_positions
     }
 
+    fn multiply(&mut self) {
+        eprintln!("before multiply: {} moves", self.moves.len());
+        self.multiplier *= REFINE_MULTIPLIER;
+        let old_moves = self.moves.clone();
+        for _ in 0 .. (REFINE_MULTIPLIER - 1) {
+            self.moves.extend(old_moves.iter().cloned());
+        }
+        eprintln!("after multiplier {}: {} moves", self.multiplier, self.moves.len());
+        // eprintln!("{}", self);
+    }
+
     fn find_removable_ranges(&self) -> HashMap<u64, (usize, Option<usize>)> {
         let mut history : HashMap<u64, (usize, Option<usize>)> = HashMap::with_capacity(self.moves.len());
 
@@ -200,18 +211,8 @@ impl Dance {
         history
     }
 
-    fn multiply(&mut self) {
-        eprintln!("before multiply: {} moves", self.moves.len());
-        self.multiplier *= REFINE_MULTIPLIER;
-        let old_moves = self.moves.clone();
-        for _ in 0 .. (REFINE_MULTIPLIER - 1) {
-            self.moves.extend(old_moves.iter().cloned());
-        }
-        eprintln!("after multiplier {}: {} moves", self.multiplier, self.moves.len());
-        // eprintln!("{}", self);
-    }
-
-    fn refine(&mut self) -> bool {
+    fn collapse_removable_ranges(&mut self) -> bool {
+        let mut made_change = false;
         let removable_ranges = self.find_removable_ranges();
         /*
         let mut removable_ranges_sorted = removable_ranges.values().collect::<Vec<&(usize, Option<usize>)>>();
@@ -237,8 +238,6 @@ impl Dance {
 
         let removable_ranges_iter = removable_ranges_sorted.iter();
         */
-
-        let mut made_change = false;
 
 /*
   1      2      3      4      5      6
@@ -287,15 +286,79 @@ A      B                                  D
             }
         }
 
+        made_change
+    }
+
+    fn collapse_spins(&mut self) -> bool {
+        /*
+        0123456789abcdef
+        x0/1
+        1023456789abcdef
+        s1
+        f1023456789abcde
+
+        0123456789abcdef
+        s1
+        f0123456789abcde
+        x1/2
+        f1023456789abcde
+
+        s1
+        x1/2
+        s1
+        x1/2
+
+        s2
+        x2/3
+        x1/2
+        */
+
+        /*
+               0123456789abcdef
+        s1     f0123456789abcde
+        x1/2   f1023456789abcde
+        s1     ef1023456789abcd
+        x1/2   e1f023456789abcd
+        s1     de1f023456789abc
+        x1/2   d1ef023456789abc
+        s1     cd1ef023456789ab
+
+               0123456789abcdef
+        s4     cdef0123456789ab
+        x4/5   cdef1023456789ab
+        x3/4   cde1f023456789ab
+        x2/3   cd1ef023456789ab
+        */
+        let mut total_spin = 0;
+        for step in self.moves.iter_mut().rev() {
+            match step {
+                &mut DanceMove::Spin(spin) => {
+                    total_spin += spin;
+                    *step = DanceMove::Spin(0);
+                },
+                &mut DanceMove::Exchange(a, b) => {
+                    *step = DanceMove::Exchange((((a as u32) + total_spin) % (NUM_DANCERS as u32)) as u8, (((b as u32) + total_spin) % (NUM_DANCERS as u32)) as u8);
+                },
+                &mut DanceMove::Partner(a, b) => (),
+            }
+        }
+
+        total_spin != 0
+    }
+
+    fn refine(&mut self) -> bool {
+        self.collapse_spins();
+        self.collapse_removable_ranges();
+
         let pre_moves = self.moves.len();
         eprintln!("before: {} moves", self.moves.len());
         self.moves.retain(|step| {
             *step != DanceMove::Spin(0)
         });
-        eprintln!("removed {} in {} ranges: {} moves left", pre_moves - self.moves.len(), removable_ranges.len(), self.moves.len());
+        eprintln!("removed {}: {} moves left", pre_moves - self.moves.len(), self.moves.len());
         // eprintln!("{}", self);
 
-        made_change
+        self.moves.len() != pre_moves
     }
 }
 
@@ -490,7 +553,7 @@ fn solve_b(input : &str) -> String {
     let mut dance = Dance::from(input);
     //const NUM_TIMES_B : u64 = 1000000000;
     const NUM_TIMES_B : u64 = 1000000000;
-    const MAX_MULTIPLIER : u64 = 10;
+    const MAX_MULTIPLIER : u64 = NUM_TIMES_B;
 
     while dance.multiplier < MAX_MULTIPLIER {
         while dance.refine() {}
