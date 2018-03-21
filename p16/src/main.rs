@@ -25,6 +25,18 @@ enum DanceMove {
     Partner(u8, u8),
 }
 
+struct RemovableRange {
+    start : usize,
+    end_opt : Option<usize>,
+    generation : u32,
+}
+
+struct RangeHolder {
+    ranges : HashMap<u64, RemovableRange>,
+    valid_ranges : Vec<u64>,
+    generation : u32,
+}
+
 struct Dance {
     moves : Vec<DanceMove>,
     multiplier : u64,
@@ -105,15 +117,19 @@ impl fmt::Display for DanceMove {
 
 impl Dance {
     fn from(moves : &str) -> Dance {
+        let moves = moves.split(',').map(DanceMove::from).filter(|step| {
+            // Omit moves that do nothing
+            match step {
+                &DanceMove::Spin(a) => a != 0,
+                &DanceMove::Exchange(a, b) => a != b,
+                &DanceMove::Partner(a, b) => a != b,
+            }
+        }).collect::<Vec<DanceMove>>();
+
+        let moves_len = moves.len();
+
         Dance {
-            moves : moves.split(',').map(DanceMove::from).filter(|step| {
-                // Omit moves that do nothing
-                match step {
-                    &DanceMove::Spin(a) => a != 0,
-                    &DanceMove::Exchange(a, b) => a != b,
-                    &DanceMove::Partner(a, b) => a != b,
-                }
-            }).collect(),
+            moves : moves,
             multiplier : 1,
         }
     }
@@ -138,7 +154,7 @@ impl Dance {
     where P : Performance {
         let mut final_positions = performance.finish();
 
-        const OUTPUT_ITERATIONS : u64 = 1;
+        const OUTPUT_ITERATIONS : u64 = 100;
         let mut iteration_counter = 0;
         let mut period_time = Instant::now();
 
@@ -149,7 +165,7 @@ impl Dance {
                 let elapsed = period_time.elapsed();
                 let elapsed_ms = ((elapsed.as_secs() * 1000) as u32) + (elapsed.subsec_nanos() / 1000000);
 
-                eprintln!("poses after {}: {}. {} iterations per sec", i, final_positions, ((OUTPUT_ITERATIONS * 1000) as f32) / elapsed_ms as f32);
+                eprintln!("poses after {} of {}: {}. {} iterations per sec", i, num_times, final_positions, ((OUTPUT_ITERATIONS * 1000) as f32) / elapsed_ms as f32);
 
                 iteration_counter = 0;
                 period_time = Instant::now();
@@ -173,18 +189,24 @@ impl Dance {
         // eprintln!("{}", self);
     }
 
-    fn find_removable_ranges(&self) -> HashMap<u64, (usize, Option<usize>)> {
-        let mut history : HashMap<u64, (usize, Option<usize>)> = HashMap::with_capacity(self.moves.len());
+    fn find_removable_ranges(&self, ranges : &mut RangeHolder) {
+        ranges.start_new_generation();
 
         let performance = self.perform_int();
 
         for (i, dancers) in performance.enumerate() {
-            if let Some(poses) = history.get_mut(&dancers) {
-                poses.1 = Some(i);
-                //eprintln!("{}: {:016x} previously at {}. range: {}", i, dancers, poses.0, i - poses.0);
+            if let Some(remrange) = ranges.ranges.get_mut(&dancers) {
+                if remrange.generation == ranges.generation {
+                    remrange.end_opt = Some(i);
+                    ranges.valid_ranges.push(dancers);
+                    //eprintln!("{}: {:016x} previously at {}. range: {}", i, dancers, remrange.0, i - remrange.0);
+                } else {
+                    remrange.generation = ranges.generation;
+                    remrange.start = i;
+                }
             } else {
                 //eprintln!("{}: {:016x}", i, dancers);
-                history.insert(dancers, (i, None));
+                ranges.ranges.insert(dancers, RemovableRange { start : i, end_opt : None, generation : ranges.generation });
             }
         }
 
@@ -207,15 +229,14 @@ impl Dance {
 
         ranges
         */
-
-        history
     }
 
-    fn collapse_removable_ranges(&mut self) -> bool {
+    fn collapse_removable_ranges(&mut self, ranges : &mut RangeHolder) -> bool {
         let mut made_change = false;
-        let removable_ranges = self.find_removable_ranges();
+        self.find_removable_ranges(ranges);
+
         /*
-        let mut removable_ranges_sorted = removable_ranges.values().collect::<Vec<&(usize, Option<usize>)>>();
+        let mut removable_ranges_sorted = ranges.values().collect::<Vec<&(usize, Option<usize>)>>();
         removable_ranges_sorted.sort_unstable_by(|&&(start1, end_opt1), &&(start2, end_opt2)| {
             if start1 == start2 {
                 if let Some(end1) = end_opt1 {
@@ -240,49 +261,65 @@ impl Dance {
         */
 
 /*
-  1      2      3      4      5      6
+  0      1      2      3      4      5
   A->B   B->C   C->D   D->C   C->E   E->D
 A      B      C      D      C      E      D
 
-  1      2      5      6
+  0      1      4      5
   A->B   B->C   C->E   E->D
 A      B      C      E      D
 
-  1      2      3      4      5      6
+  0      1      2      3      4      5
   A->B   B->C   C->D   D->C   C->E   E->D
 A      B      C      D      C      E      D
-              |--------------------|
 
-  1      2      3      4      5      6
+C: start = 1,
+   end = 3
+
+D: start = 2
+   end = 5
+
+  0      1      2      3      4      5
   A->B   B->C                        E->D
 A      B                                  D
 */
 
-        let mut range_threshold_percentage = 50;
+        const MIN_RANGE_THRESHOLD_PERCENTAGE_HUNDREDTHS : usize = 50;
+        let mut range_threshold_percentage_hundredths = 50000;
 
         loop {
-            //eprintln!("trying range threshold {}: {} moves", range_threshold_percentage, ((self.moves.len() * range_threshold_percentage) / 100));
+            let mut changes_in_this_loop = 0;
+            //eprintln!("trying range threshold {}: {} moves", range_threshold_percentage_hundredths, ((self.moves.len() * range_threshold_percentage_hundredths) / 100000));
 
-            let removable_ranges_iter = removable_ranges.values();
-            for &(start, end_opt) in removable_ranges_iter {
-                if let Some(&end) = end_opt.as_ref() {
-                    made_change = true;
-
-                    if (end - 1 - start) >= ((self.moves.len() * range_threshold_percentage) / 100) &&
-                        self.moves[start] != DanceMove::Spin(0) &&
-                        self.moves[end-1] != DanceMove::Spin(0) {
-                        for i in start .. end {
-                            //eprintln!("{}: {} -> s0", i, self.moves[i]);
-                            self.moves[i] = DanceMove::Spin(0);
+            let removable_ranges_iter = ranges.valid_ranges.iter();
+            for dancers in removable_ranges_iter {
+                let remrange = ranges.ranges.get(&dancers).unwrap();
+                if remrange.generation == ranges.generation {
+                    if let Some(&end) = remrange.end_opt.as_ref() {
+                        made_change = true;
+                        if (end - 1 - remrange.start) >= ((self.moves.len() * range_threshold_percentage_hundredths) / 100000) &&
+                            self.moves[remrange.start] != DanceMove::Spin(0) &&
+                            self.moves[end-1] != DanceMove::Spin(0) {
+                            changes_in_this_loop += 1;
+                            for i in remrange.start .. end {
+                                //eprintln!("{}: {} -> s0", i, self.moves[i]);
+                                self.moves[i] = DanceMove::Spin(0);
+                            }
+                        } else {
+                            //eprintln!("range {}-{} ({}) didn't work. start valid: {}, end valid: {}", end, remrange.start, (end - 1 - remrange.start), self.moves[remrange.start] != DanceMove::Spin(0), self.moves[end-1] != DanceMove::Spin(0));
                         }
                     }
                 }
             }
 
-            if range_threshold_percentage == 0 {
-                break;
+            if changes_in_this_loop == 0 {
+                if range_threshold_percentage_hundredths <= MIN_RANGE_THRESHOLD_PERCENTAGE_HUNDREDTHS {
+                    break;
+                } else {
+                    range_threshold_percentage_hundredths /= 2;
+                }
             } else {
-                range_threshold_percentage /= 2;
+                //eprintln!("removed {}", changes_in_this_loop);
             }
         }
 
@@ -346,9 +383,20 @@ A      B                                  D
         total_spin != 0
     }
 
-    fn refine(&mut self) -> bool {
-        self.collapse_spins();
-        self.collapse_removable_ranges();
+    fn refine(&mut self, ranges : &mut RangeHolder) -> bool {
+        if self.multiplier == 1 {
+            self.collapse_spins();
+
+            let pre_moves = self.moves.len();
+            eprintln!("before: {} moves", self.moves.len());
+            self.moves.retain(|step| {
+                *step != DanceMove::Spin(0)
+            });
+            eprintln!("removed {}: {} moves left", pre_moves - self.moves.len(), self.moves.len());
+            // eprintln!("{}", self);
+        }
+
+        self.collapse_removable_ranges(ranges);
 
         let pre_moves = self.moves.len();
         eprintln!("before: {} moves", self.moves.len());
@@ -369,6 +417,21 @@ impl fmt::Display for Dance {
             write!(f, "{}:    {}\n", i, step);
         }
         ret
+    }
+}
+
+impl RangeHolder {
+    fn new(dance : &Dance) -> RangeHolder {
+        RangeHolder {
+            ranges : HashMap::with_capacity(dance.moves.len()),
+            valid_ranges : Vec::with_capacity(dance.moves.len()),
+            generation : 0,
+        }
+    }
+
+    fn start_new_generation(&mut self) {
+        self.generation += 1;
+        self.valid_ranges.truncate(0);
     }
 }
 
@@ -539,9 +602,10 @@ impl<'t> Iterator for PerformanceInt<'t> {
 
 fn solve_a(input : &str) -> String {
     let mut dance = Dance::from(input);
+    let mut ranges = RangeHolder::new(&dance);
     let before = dance.get_final_positions(NUM_DANCERS, 1);
 
-    dance.refine();
+    dance.refine(&mut ranges);
 
     let after = dance.get_final_positions(NUM_DANCERS, 1);
 
@@ -551,17 +615,18 @@ fn solve_a(input : &str) -> String {
 
 fn solve_b(input : &str) -> String {
     let mut dance = Dance::from(input);
+    let mut ranges = RangeHolder::new(&dance);
     //const NUM_TIMES_B : u64 = 1000000000;
     const NUM_TIMES_B : u64 = 1000000000;
-    const MAX_MULTIPLIER : u64 = NUM_TIMES_B;
+    const MAX_MULTIPLIER : u64 = NUM_TIMES_B / 10;
 
     while dance.multiplier < MAX_MULTIPLIER {
-        while dance.refine() {}
+        while dance.refine(&mut ranges) {}
         //eprintln!("dance: {}", dance);
         dance.multiply();
     }
 
-    while dance.refine() {}
+    while dance.refine(&mut ranges) {}
     //eprintln!("dance: {}", dance);
 
     dance.get_final_positions_int(NUM_TIMES_B / MAX_MULTIPLIER)
@@ -650,6 +715,7 @@ mod test {
     #[test]
     fn refine_1() {
         let mut dance = Dance::from("s2,s15,s1,s1");
+        let mut ranges = RangeHolder::new(&dance);
 
         const NUM_REFINES : u64 = 5;
         let mut num_times = 1u64;
@@ -660,7 +726,7 @@ mod test {
         let expected_final_positions = dance.get_final_positions_int(num_times);
 
         for _ in 0 .. NUM_REFINES {
-            while dance.refine() {}
+            while dance.refine(&mut ranges) {}
             dance.multiply();
         }
 
