@@ -46,10 +46,14 @@ trait Performance : Iterator {
     fn positions(&self) -> String;
     fn rewind(&mut self);
 
-    fn finish(&mut self) -> String {
+    fn finish(&mut self) {
+        //eprintln!("start: {}", self.positions());
+
+        //let mut i = 0;
         while self.next().is_some() {
+            //eprintln!("{}: {}", i, self.positions());
+            //i += 1;
         }
-        self.positions()
     }
 
     fn dancers_to_string<'t>(dancers : impl Iterator<Item = u8>) -> String
@@ -60,6 +64,10 @@ trait Performance : Iterator {
             result.push(DanceMove::dancer_number_to_name(dancer));
         }
         result
+    }
+
+    fn is_starting_positions(&self) -> bool {
+        false
     }
 }
 
@@ -73,6 +81,8 @@ struct PerformanceString<'t> {
 struct PerformanceInt<'t> {
     // packed array, where each slot is the dancer number at that position
     dancer_at_position : u64,
+
+    position_for_dancer : [u8 ; NUM_DANCERS as usize],
     steps : &'t Vec<DanceMove>,
     position : usize,
 }
@@ -150,11 +160,26 @@ impl Dance {
         Self::finish_performance(self.perform_int(), num_times)
     }
 
+    fn find_repeat_performance(&self, limit_times : u64) -> u64 {
+        let mut performance = self.perform_int();
+
+        let mut repeats_after_iterations = 1;
+        performance.finish();
+
+        while repeats_after_iterations < limit_times && !performance.is_starting_positions() {
+            repeats_after_iterations += 1;
+            performance.rewind();
+            performance.finish();
+        }
+
+        repeats_after_iterations
+    }
+
     fn finish_performance<P>(mut performance : P, num_times : u64) -> String
     where P : Performance {
-        let mut final_positions = performance.finish();
+        performance.finish();
 
-        const OUTPUT_ITERATIONS : u64 = 100;
+        const OUTPUT_ITERATIONS : u64 = 100000;
         let mut iteration_counter = 0;
         let mut period_time = Instant::now();
 
@@ -165,17 +190,17 @@ impl Dance {
                 let elapsed = period_time.elapsed();
                 let elapsed_ms = ((elapsed.as_secs() * 1000) as u32) + (elapsed.subsec_nanos() / 1000000);
 
-                eprintln!("poses after {} of {}: {}. {} iterations per sec", i, num_times, final_positions, ((OUTPUT_ITERATIONS * 1000) as f32) / elapsed_ms as f32);
+                eprintln!("poses after {} of {}: {}. {} iterations per sec", i, num_times, performance.positions(), ((OUTPUT_ITERATIONS * 1000) as f32) / elapsed_ms as f32);
 
                 iteration_counter = 0;
                 period_time = Instant::now();
             }
 
             performance.rewind();
-            final_positions = performance.finish();
+            performance.finish();
         }
 
-        final_positions
+        performance.positions()
     }
 
     fn multiply(&mut self) {
@@ -199,13 +224,17 @@ impl Dance {
                 if remrange.generation == ranges.generation {
                     remrange.end_opt = Some(i);
                     ranges.valid_ranges.push(dancers);
-                    //eprintln!("{}: {:016x} previously at {}. range: {}", i, dancers, remrange.0, i - remrange.0);
+                    //eprintln!("{}: {:016x} previously at {}. range: {}", i, dancers, remrange.start, i - remrange.start);
+                    eprintln!("{}: {} previously at {}. range: {}", i, PerformanceInt::dancers_u64_to_string(&dancers), remrange.start, i - remrange.start);
                 } else {
                     remrange.generation = ranges.generation;
                     remrange.start = i;
+                    //eprintln!("{}: {:016x}", i, dancers);
+                    //eprintln!("{}: {}", i, PerformanceInt::dancers_u64_to_string(&dancers));
                 }
             } else {
                 //eprintln!("{}: {:016x}", i, dancers);
+                //eprintln!("{}: {}", i, PerformanceInt::dancers_u64_to_string(&dancers));
                 ranges.ranges.insert(dancers, RemovableRange { start : i, end_opt : None, generation : ranges.generation });
             }
         }
@@ -279,9 +308,19 @@ C: start = 1,
 D: start = 2
    end = 5
 
-  0      1      2      3      4      5
-  A->B   B->C                        E->D
-A      B                                  D
+       0      1      2      3      4      5      6      7
+       A->B   B->C   C->D   D->E   E->C   C->F   F->E   E->G
+A      B      C      D      E      C      F      E      G
+              |--------------------|
+                            |--------------------|
+
+       0      1      2      3      4      5      6      7
+       A->B   B->C                        C->F   F->E   E->G
+A      B      C                           F      E      G
+
+       0      1      2      3      4      5      6      7
+       A->B   B->C                               _->E   E->G
+A      B      C                                  E      G
 */
 
         const MIN_RANGE_THRESHOLD_PERCENTAGE_HUNDREDTHS : usize = 50;
@@ -297,11 +336,11 @@ A      B                                  D
                 if remrange.generation == ranges.generation {
                     if let Some(&end) = remrange.end_opt.as_ref() {
                         made_change = true;
-                        if (end - 1 - remrange.start) >= ((self.moves.len() * range_threshold_percentage_hundredths) / 100000) &&
-                            self.moves[remrange.start] != DanceMove::Spin(0) &&
-                            self.moves[end-1] != DanceMove::Spin(0) {
+                        if (end - (remrange.start + 1)) >= ((self.moves.len() * range_threshold_percentage_hundredths) / 100000) &&
+                            self.moves[remrange.start + 1] != DanceMove::Spin(0) &&
+                            self.moves[end] != DanceMove::Spin(0) {
                             changes_in_this_loop += 1;
-                            for i in remrange.start .. end {
+                            for i in remrange.start+1 .. end+1 {
                                 //eprintln!("{}: {} -> s0", i, self.moves[i]);
                                 self.moves[i] = DanceMove::Spin(0);
                             }
@@ -366,21 +405,28 @@ A      B                                  D
         x3/4   cde1f023456789ab
         x2/3   cd1ef023456789ab
         */
-        let mut total_spin = 0;
-        for step in self.moves.iter_mut().rev() {
+        let mut total_spin : u8 = 0;
+        let mut first_spin_index = 0;
+        for (i, step) in self.moves.iter_mut().enumerate().rev() {
             match step {
                 &mut DanceMove::Spin(spin) => {
-                    total_spin += spin;
+                    total_spin = (((total_spin as u32) + spin) % (NUM_DANCERS as u32)) as u8;
                     *step = DanceMove::Spin(0);
+                    first_spin_index = i;
                 },
                 &mut DanceMove::Exchange(a, b) => {
-                    *step = DanceMove::Exchange((((a as u32) + total_spin) % (NUM_DANCERS as u32)) as u8, (((b as u32) + total_spin) % (NUM_DANCERS as u32)) as u8);
+                    *step = DanceMove::Exchange((a + total_spin) % NUM_DANCERS, (b + total_spin) % NUM_DANCERS);
                 },
                 &mut DanceMove::Partner(a, b) => (),
             }
         }
 
-        total_spin != 0
+        if total_spin != 0 {
+            self.moves[first_spin_index] = DanceMove::Spin(total_spin as u32);
+            true
+        } else {
+            false
+        }
     }
 
     fn refine(&mut self, ranges : &mut RangeHolder) -> bool {
@@ -396,7 +442,7 @@ A      B                                  D
             // eprintln!("{}", self);
         }
 
-        self.collapse_removable_ranges(ranges);
+        //self.collapse_removable_ranges(ranges);
 
         let pre_moves = self.moves.len();
         eprintln!("before: {} moves", self.moves.len());
@@ -423,7 +469,7 @@ impl fmt::Display for Dance {
 impl RangeHolder {
     fn new(dance : &Dance) -> RangeHolder {
         RangeHolder {
-            ranges : HashMap::with_capacity(dance.moves.len()),
+            ranges : HashMap::with_capacity(5000000),
             valid_ranges : Vec::with_capacity(dance.moves.len()),
             generation : 0,
         }
@@ -524,6 +570,7 @@ impl<'t> PerformanceInt<'t> {
 
         PerformanceInt {
             dancer_at_position : dancers_init,
+            position_for_dancer : [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ],
             steps : &moves,
             position : 0,
         }
@@ -533,21 +580,12 @@ impl<'t> PerformanceInt<'t> {
         ((NUM_DANCERS - 1 - position) * (BITS_PER_DANCER as u8)) as u32
     }
 
-    fn get_dancer_at_position(&self, position : u8) -> u8 {
-        ((self.dancer_at_position >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
+    fn get_dancer_at_position(dancers : &u64, position : u8) -> u8 {
+        ((dancers >> Self::get_shift_for_position(position)) & DANCER_MASK) as u8
     }
 
     fn get_position_of_dancer(&self, dancer : u8) -> u8 {
-        let mut position = 0;
-        while position < NUM_DANCERS {
-            if self.get_dancer_at_position(position) == dancer {
-                return position;
-            }
-
-            position += 1;
-        }
-
-        panic!("couldn't find position for dancer {}", dancer);
+        self.position_for_dancer[dancer as usize]
     }
 
     fn set_dancers_at_positions(&mut self, position1 : u8, dancer1 : u8, position2 : u8, dancer2 : u8) {
@@ -556,18 +594,35 @@ impl<'t> PerformanceInt<'t> {
             !(DANCER_MASK << Self::get_shift_for_position(position2)) |
             (((dancer1 as u64) & DANCER_MASK) << Self::get_shift_for_position(position1)) |
             (((dancer2 as u64) & DANCER_MASK) << Self::get_shift_for_position(position2));
+
+        self.position_for_dancer[dancer1 as usize] = position1;
+        self.position_for_dancer[dancer2 as usize] = position2;
+    }
+
+    fn recompute_positions_for_dancers(&mut self) {
+        for position in 0 .. NUM_DANCERS {
+           self.position_for_dancer[Self::get_dancer_at_position(&self.dancer_at_position, position) as usize] = position;
+        }
+    }
+
+    fn dancers_u64_to_string(dancers : &u64) -> String {
+        Self::dancers_to_string((0 .. NUM_DANCERS).map(|i| {
+            Self::get_dancer_at_position(dancers, i)
+        }))
     }
 }
 
 impl<'t> Performance for PerformanceInt<'t> {
     fn positions(&self) -> String {
-        Self::dancers_to_string((0 .. NUM_DANCERS).map(|i| {
-            self.get_dancer_at_position(i)
-        }))
+        Self::dancers_u64_to_string(&self.dancer_at_position)
     }
 
     fn rewind(&mut self) {
         self.position = 0;
+    }
+
+    fn is_starting_positions(&self) -> bool {
+        self.dancer_at_position == 0x0123456789abcdef
     }
 }
 
@@ -579,10 +634,11 @@ impl<'t> Iterator for PerformanceInt<'t> {
             match self.steps[self.position] {
                 DanceMove::Spin(count) => {
                     self.dancer_at_position = self.dancer_at_position.rotate_right(count * (BITS_PER_DANCER as u32));
+                    self.recompute_positions_for_dancers();
                 },
                 DanceMove::Exchange(a, b) => {
-                    let dancer_a = self.get_dancer_at_position(a);
-                    let dancer_b = self.get_dancer_at_position(b);
+                    let dancer_a = Self::get_dancer_at_position(&self.dancer_at_position, a);
+                    let dancer_b = Self::get_dancer_at_position(&self.dancer_at_position, b);
                     self.set_dancers_at_positions(a, dancer_b, b, dancer_a);
                 },
                 DanceMove::Partner(a, b) => {
@@ -605,7 +661,8 @@ fn solve_a(input : &str) -> String {
     let mut ranges = RangeHolder::new(&dance);
     let before = dance.get_final_positions(NUM_DANCERS, 1);
 
-    dance.refine(&mut ranges);
+    //dance.refine(&mut ranges);
+    while dance.refine(&mut ranges) {}
 
     let after = dance.get_final_positions(NUM_DANCERS, 1);
 
@@ -616,20 +673,49 @@ fn solve_a(input : &str) -> String {
 fn solve_b(input : &str) -> String {
     let mut dance = Dance::from(input);
     let mut ranges = RangeHolder::new(&dance);
-    //const NUM_TIMES_B : u64 = 1000000000;
     const NUM_TIMES_B : u64 = 1000000000;
-    const MAX_MULTIPLIER : u64 = NUM_TIMES_B / 10;
+    //const NUM_TIMES_B : u64 = 2;
+    //const MAX_MULTIPLIER : u64 = NUM_TIMES_B;
+    const MAX_DANCE_LENGTH : usize = 3000000;
+    const MAX_MULTIPLIER : u64 = 1;
+    //const MAX_DANCE_LENGTH : usize = 1;
+    const REPEAT_PERFORMANCE_SEARCH_LIMIT : u64 = 100;
 
     while dance.multiplier < MAX_MULTIPLIER {
         while dance.refine(&mut ranges) {}
         //eprintln!("dance: {}", dance);
-        dance.multiply();
+
+        if dance.moves.len() <= MAX_DANCE_LENGTH {
+            dance.multiply();
+        } else {
+            break;
+        }
     }
 
-    while dance.refine(&mut ranges) {}
+    if dance.moves.len() <= MAX_DANCE_LENGTH {
+        while dance.refine(&mut ranges) {}
+    }
     //eprintln!("dance: {}", dance);
 
-    dance.get_final_positions_int(NUM_TIMES_B / MAX_MULTIPLIER)
+    let num_times;
+    let repeats_after_iterations = dance.find_repeat_performance(REPEAT_PERFORMANCE_SEARCH_LIMIT);
+    if repeats_after_iterations < REPEAT_PERFORMANCE_SEARCH_LIMIT {
+        num_times = NUM_TIMES_B % repeats_after_iterations;
+    } else {
+        num_times = NUM_TIMES_B;
+    }
+
+    eprintln!("need to do {} iterations", num_times);
+
+    let answer = dance.get_final_positions_int(num_times / dance.multiplier);
+
+    /*
+    let mut dance = Dance::from(input);
+    let oracle = dance.get_final_positions_int(NUM_TIMES_B);
+    eprintln!("oracle: {}. matches: {}", oracle, oracle == answer);
+    */
+
+    answer
 }
 
 fn main() {
@@ -743,3 +829,18 @@ mod test {
         test_dance_repeat(5, "s1,x3/4,pe/b", 2, "ceadb");
     }
 }
+
+// abcdefghijklmnop
+
+// bcdaefghijklmnop
+// cdabefghijklmnop
+// dabcefghijklmnop
+// abcdefghijklmnop
+
+// bcdaefghijklmnop
+// cdabefghijklmnop
+// dabcefghijklmnop
+// abcdefghijklmnop
+
+// bcdaefghijklmnop
+// cdabefghijklmnop
