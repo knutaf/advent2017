@@ -9,6 +9,8 @@ use regex::Regex;
 extern crate aoclib;
 use aoclib::*;
 
+const NUM_EXECUTIONS_B : i64 = 2;
+
 enum RegisterOrValue {
     Reg(char),
     Val(i64),
@@ -42,7 +44,7 @@ struct Execution<'t> {
 
 struct ExecutionStep {
     is_blocked : bool,
-    new_snd : Option<i64>,
+    new_snd_opt : Option<i64>,
 }
 
 struct ExecutionB<'t> {
@@ -281,6 +283,10 @@ impl<'t> ExecutionB<'t> {
         exec
     }
 
+    fn rcv(&mut self, value : i64) {
+        self.rcv_queue.insert(0, value);
+    }
+
     fn get_snd_count(&self) -> u32 {
         self.snd_count
     }
@@ -295,12 +301,13 @@ impl<'t> Iterator for ExecutionB<'t> {
             eprintln!("{}: {}", self.position, inst);
 
             let mut is_blocked = false;
-            let mut new_snd = None;
+            let mut new_snd_opt = None;
 
             match inst {
                 &Instruction::Snd(ref rv) => {
-                    new_snd = Some(self.registers.evaluate(&rv));
-                    eprintln!("  sending {:?}", new_snd.as_ref());
+                    self.snd_count += 1;
+                    new_snd_opt = Some(self.registers.evaluate(&rv));
+                    eprintln!("  sending {:?}", new_snd_opt.as_ref());
                 }
                 &Instruction::Set(ref reg, ref rv) => {
                     eprintln!("  {} <= {}", reg, self.registers.evaluate(&rv));
@@ -331,40 +338,40 @@ impl<'t> Iterator for ExecutionB<'t> {
             }
 
             self.position =
-            if is_blocked {
-                self.position
-            } else {
-                match inst {
-                    &Instruction::Jgz(ref cond, ref jump_offset) => {
-                        if self.registers.evaluate(&cond) > 0 {
-                            let offset = self.registers.evaluate(&jump_offset);
-                            if offset >= 0 {
-                                self.position + (offset as usize)
-                            } else {
-                                if ((offset * -1) as usize) <= self.position {
-                                    ((self.position as i64) + offset) as usize
+                if is_blocked {
+                    self.position
+                } else {
+                    match inst {
+                        &Instruction::Jgz(ref cond, ref jump_offset) => {
+                            if self.registers.evaluate(&cond) > 0 {
+                                let offset = self.registers.evaluate(&jump_offset);
+                                if offset >= 0 {
+                                    self.position + (offset as usize)
                                 } else {
-                                    self.instructions.len()
+                                    if ((offset * -1) as usize) <= self.position {
+                                        ((self.position as i64) + offset) as usize
+                                    } else {
+                                        self.instructions.len()
+                                    }
                                 }
+                            } else {
+                                self.position + 1
                             }
-                        } else {
+                        },
+                        &Instruction::Snd(..) |
+                        &Instruction::Set(..) |
+                        &Instruction::Add(..) |
+                        &Instruction::Mul(..) |
+                        &Instruction::Mod(..) |
+                        &Instruction::Rcv(..) => {
                             self.position + 1
-                        }
-                    },
-                    &Instruction::Snd(..) |
-                    &Instruction::Set(..) |
-                    &Instruction::Add(..) |
-                    &Instruction::Mul(..) |
-                    &Instruction::Mod(..) |
-                    &Instruction::Rcv(..) => {
-                        self.position + 1
-                    },
-                }
-            };
+                        },
+                    }
+                };
 
             Some(ExecutionStep {
                 is_blocked,
-                new_snd,
+                new_snd_opt,
             })
         } else {
             None
@@ -372,9 +379,32 @@ impl<'t> Iterator for ExecutionB<'t> {
     }
 }
 
+fn run_duet(prog : &Program) -> Vec<ExecutionB> {
+    let mut execs = (0 .. NUM_EXECUTIONS_B).map(|i| {
+        prog.execute_b(i)
+    }).collect::<Vec<ExecutionB>>();
+
+    let mut made_progress = true;
+    while made_progress {
+        made_progress = false;
+
+        for i in 0 .. execs.len() {
+            if let Some(step) = execs[i].next() {
+                made_progress = made_progress || !step.is_blocked;
+                if let Some(new_snd) = step.new_snd_opt {
+                    made_progress = true;
+                    let execs_len = execs.len();
+                    execs[(i + 1) % execs_len].rcv(new_snd);
+                }
+            }
+        }
+    }
+
+    execs
+}
+
 fn solve_a(input : &str) -> i64 {
     let prog = Program::load(input);
-
     eprintln!("prog: {}", prog);
 
     prog.execute().find(|last_rcv_opt| {
@@ -382,8 +412,11 @@ fn solve_a(input : &str) -> i64 {
     }).unwrap().unwrap()
 }
 
-fn solve_b(input : &str) -> i64 {
-    0
+fn solve_b(input : &str) -> u32 {
+    let prog = Program::load(input);
+    eprintln!("prog: {}", prog);
+
+    run_duet(&prog)[1].snd_count
 }
 
 fn main() {
@@ -418,8 +451,15 @@ jgz a -2";
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_given() {
+        let input =
+r"snd 1
+snd 2
+snd p
+rcv a
+rcv b
+rcv c
+rcv d";
+        assert_eq!(solve_b(&input), 3);
     }
 }
