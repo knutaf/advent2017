@@ -142,6 +142,7 @@ impl<'t> Iterator for RouteWalker<'t> {
                     }
                 },
                 ' ' => {
+                    eprintln!("{}", self.position);
                     eprintln!("    Stepped on a blank. must be done");
                     self.position.x = self.table.grid[0].len();
                     self.position.y = self.table.grid.len();
@@ -153,9 +154,13 @@ impl<'t> Iterator for RouteWalker<'t> {
                 }
             }
 
-            self.move_one_step();
-
-            Some(&self.collected_letters)
+            if self.position.y < self.table.grid.len() &&
+               self.position.x < self.table.grid[0].len() {
+                self.move_one_step();
+                Some(&self.collected_letters)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -168,7 +173,8 @@ fn solve_a(input : &str) -> String {
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    let routing_table = RoutingTable::load(input);
+    routing_table.walk().count() as u32
 }
 
 fn main() {
@@ -187,7 +193,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn a_1() {
+    fn a_given() {
         let input =
 r"     |          
      |  +--+    
@@ -199,8 +205,22 @@ r"     |
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_short() {
+        let input =
+r"|
+A";
+        assert_eq!(solve_b(&input), 2);
+    }
+
+    #[test]
+    fn b_given() {
+        let input =
+r"     |          
+     |  +--+    
+     A  |  C    
+ F---|----E|--+ 
+     |  |  |  D 
+     +B-+  +--+ ";
+        assert_eq!(solve_b(&input), 38);
     }
 }
