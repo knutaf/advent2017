@@ -28,7 +28,7 @@ impl Ring {
 
         self.skip_size += 1;
 
-        (self.ring[0] as u32) * (self.ring[1] as u32)
+        u32::from(self.ring[0]) * u32::from(self.ring[1])
     }
 
     fn reduce(&self, block_size : usize) -> Vec<u8> {
@@ -55,11 +55,11 @@ pub fn knot_hash(input : &str) -> Vec<u8> {
 
     for _ in 0 .. NUM_ROUNDS {
         for b in input.bytes() {
-            let _ = ring.advance(b as usize);
+            let _ = ring.advance(usize::from(b));
         }
 
-        for b in SUFFIX_LENGTHS.iter() {
-            let _ = ring.advance(*b as usize);
+        for b in &SUFFIX_LENGTHS {
+            let _ = ring.advance(usize::from(*b));
         }
     }
 
@@ -67,7 +67,7 @@ pub fn knot_hash(input : &str) -> Vec<u8> {
 }
 
 pub fn knot_hash_as_hex(input : &str) -> String {
-    numbers_to_hex_string(knot_hash(input).iter().map(|n| *n as u8))
+    numbers_to_hex_string(knot_hash(input).iter().cloned())
 }
 
 #[cfg(test)]
