@@ -29,7 +29,7 @@ impl<T> ListNode<T> {
             this : Weak::new(),
             prev : Weak::new(),
             next : None,
-            data : data,
+            data
         }));
 
         head.borrow_mut().this = Rc::downgrade(&head);

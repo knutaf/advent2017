@@ -1,6 +1,4 @@
 #![feature(nll)]
-#![feature(conservative_impl_trait)]
-#![feature(universal_impl_trait)]
 
 use std::io::prelude::*;
 use std::env;
@@ -35,12 +33,12 @@ pub fn parse_nums<'t, T>(string : &'t str) -> impl Iterator<Item = T> + 't
     })
 }
 
-pub fn position_eq<T>(mut iter : impl Iterator<Item = T>, item : T) -> Option<usize>
+pub fn position_eq<T>(mut iter : impl Iterator<Item = T>, item : &T) -> Option<usize>
     where T : PartialEq {
-    iter.position(|x| { x == item })
+    iter.position(|x| { x == *item })
 }
 
-pub fn any_eq<T>(iter : impl Iterator<Item = T>, item : T) -> bool
+pub fn any_eq<T>(iter : impl Iterator<Item = T>, item : &T) -> bool
     where T : PartialEq {
     position_eq(iter, item).is_some()
 }
@@ -77,7 +75,7 @@ pub fn reverse_circular_vec_segment<T>(v : &mut Vec<T>, start_index : usize, len
 pub fn numbers_to_hex_string<T>(iter : impl Iterator<Item = T>) -> String
 where T : std::fmt::LowerHex {
     let mut result = String::new();
-    let _ = iter.fold((), |_, n| {
+    iter.fold((), |_, n| {
         result.push_str(format!("{0:01$x}", n, std::mem::size_of::<T>() * 2).as_str());
     });
     result
