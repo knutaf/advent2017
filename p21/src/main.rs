@@ -1,16 +1,12 @@
 #![feature(nll)]
 
-extern crate aoclib;
-use aoclib::*;
 use std::fmt;
 
-#[derive(Clone, PartialEq)]
-enum PixelValue {
-    On,
-    Off,
-}
+extern crate aoclib;
+use aoclib::*;
+use aoclib::onoffpixel::OnOffPixel;
 
-type PixelGrid = aoclib::grid::Grid<PixelValue>;
+type PixelGrid = aoclib::grid::Grid<OnOffPixel>;
 
 // Initial state in the problem is always:
 // .#.
@@ -18,9 +14,9 @@ type PixelGrid = aoclib::grid::Grid<PixelValue>;
 // ###
 thread_local!(static INITIAL_ART : PixelGrid = PixelGrid::from_rows(
     vec![
-        vec![PixelValue::Off, PixelValue::On, PixelValue::Off],
-        vec![PixelValue::Off, PixelValue::Off, PixelValue::On],
-        vec![PixelValue::On, PixelValue::On, PixelValue::On],]));
+        vec![OnOffPixel::Off, OnOffPixel::On, OnOffPixel::Off],
+        vec![OnOffPixel::Off, OnOffPixel::Off, OnOffPixel::On],
+        vec![OnOffPixel::On, OnOffPixel::On, OnOffPixel::On],]));
 
 struct Transformation {
     input_variants : Vec<PixelGrid>,
@@ -32,27 +28,11 @@ struct Art<'t> {
     transformations : &'t [Transformation],
 }
 
-impl PixelValue {
-    fn parse(ch : char) -> PixelValue {
-        if ch == '.' {
-            PixelValue::Off
-        } else {
-            PixelValue::On
-        }
-    }
-}
-
-impl fmt::Display for PixelValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", if self == &PixelValue::Off { '.' } else { '#' })
-    }
-}
-
 impl Transformation {
     fn parse_to_grid(grid_rep : &str) -> PixelGrid {
         let mut grid = PixelGrid::new();
         for line in grid_rep.split('/') {
-            grid.add_row(line.chars().map(PixelValue::parse).collect());
+            grid.add_row(line.chars().map(OnOffPixel::parse).collect());
         }
         grid
     }
@@ -114,7 +94,7 @@ impl<'t> Art<'t> {
 
     fn num_on(&self) -> usize {
         self.grid.iter().fold(0, |sofar, item| {
-            sofar + if *item == PixelValue::On { 1 } else { 0 }
+            sofar + if *item == OnOffPixel::On { 1 } else { 0 }
         })
     }
 }
@@ -145,7 +125,7 @@ impl<'t> Iterator for Art<'t> {
             (self.grid.size_x() * 4) / 3
         };
 
-        let row = (0 .. output_grid_size).map(|_| PixelValue::Off).collect::<Vec<PixelValue>>();
+        let row = (0 .. output_grid_size).map(|_| OnOffPixel::Off).collect::<Vec<OnOffPixel>>();
         let mut output_grid = PixelGrid::new();
         for _ in 0 .. output_grid_size {
             output_grid.add_row_slice(row.as_slice());
