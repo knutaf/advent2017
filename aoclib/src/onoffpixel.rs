@@ -15,6 +15,14 @@ impl OnOffPixel {
             OnOffPixel::On
         }
     }
+
+    pub fn opposite(&self) -> OnOffPixel {
+        if self == &OnOffPixel::On {
+            OnOffPixel::Off
+        } else {
+            OnOffPixel::On
+        }
+    }
 }
 
 impl fmt::Display for OnOffPixel {
@@ -37,5 +45,11 @@ mod test {
     fn display() {
         assert_eq!(format!("{}", OnOffPixel::Off), ".");
         assert_eq!(format!("{}", OnOffPixel::On), "#");
+    }
+
+    #[test]
+    fn opposite() {
+        assert_eq!(OnOffPixel::On.opposite(), OnOffPixel::Off);
+        assert_eq!(OnOffPixel::Off.opposite(), OnOffPixel::On);
     }
 }
