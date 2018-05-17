@@ -7,6 +7,7 @@ pub mod list;
 pub mod knot_hash;
 pub mod bit_iterator;
 pub mod grid;
+pub mod onoffpixel;
 
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
