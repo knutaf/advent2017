@@ -7,24 +7,34 @@ use aoclib::*;
 use aoclib::onoffpixel::OnOffPixel;
 use aoclib::direction::Direction;
 
-type InfectionGrid = HashMap<(i32, i32), OnOffPixel>;
+#[derive(PartialEq, Clone, Debug)]
+enum InfectionState {
+    Clean,
+    Weakened,
+    Infected,
+    Flagged,
+}
+
+type InfectionGrid = HashMap<(i32, i32), InfectionState>;
 
 struct WormProgress {
     pixels : InfectionGrid,
     pos : (i32, i32),
     dir : Direction,
-    num_activated : u32,
+    num_infected : u32,
+    puzzle_a : bool,
 }
 
 impl WormProgress {
-    fn load(input : &str) -> WormProgress {
+    fn load(input : &str, puzzle_a : bool) -> WormProgress {
         let offset = ((input.lines().nth(0).unwrap().len() - 1) / 2) as i32;
 
         let mut ret = WormProgress {
             pixels : InfectionGrid::new(),
             pos : (0, 0),
             dir : Direction::Up,
-            num_activated : 0,
+            num_infected : 0,
+            puzzle_a,
         };
 
         for (y, line) in input.lines().enumerate() {
@@ -34,7 +44,7 @@ impl WormProgress {
                     // y has to be flipped
                     let pos = ((x as i32) - offset, offset - (y as i32));
                     eprintln!("on at {:?}", pos);
-                    ret.pixels.insert(pos, value);
+                    ret.pixels.insert(pos, InfectionState::Infected);
                 }
             }
         }
@@ -42,14 +52,36 @@ impl WormProgress {
         ret
     }
 
-    fn toggle_current(&mut self) -> bool {
+    fn advance_a(&mut self) -> InfectionState {
         let ret;
         if let Some(val) = self.pixels.get_mut(&self.pos) {
-            ret = val.is_on();
-            *val = val.opposite();
+            ret = val.clone();
+            if *val == InfectionState::Infected {
+                *val = InfectionState::Clean;
+            } else {
+                *val = InfectionState::Infected;
+            }
         } else {
-            ret = false;
-            self.pixels.insert(self.pos, OnOffPixel::On);
+            ret = InfectionState::Clean;
+            self.pixels.insert(self.pos, InfectionState::Infected);
+        }
+        ret
+    }
+
+    fn advance_b(&mut self) -> InfectionState {
+        let ret;
+        if let Some(val) = self.pixels.get_mut(&self.pos) {
+            ret = val.clone();
+
+            *val = match val {
+                &mut InfectionState::Clean => InfectionState::Weakened,
+                &mut InfectionState::Weakened => InfectionState::Infected,
+                &mut InfectionState::Infected => InfectionState::Flagged,
+                &mut InfectionState::Flagged => InfectionState::Clean,
+            };
+        } else {
+            ret = InfectionState::Clean;
+            self.pixels.insert(self.pos, InfectionState::Weakened);
         }
         ret
     }
@@ -59,36 +91,61 @@ impl Iterator for WormProgress {
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // if was infected
-        if self.toggle_current() {
-            self.dir = self.dir.turn_right();
-        }
+        if self.puzzle_a {
+            if self.advance_a() == InfectionState::Infected {
+                self.dir = self.dir.turn_right();
+            }
 
-        // else was not infected
-        else {
-            //eprintln!("infecting {:?}", self.pos);
-            self.dir = self.dir.turn_left();
-            self.num_activated += 1;
+            // else was not infected
+            else {
+                //eprintln!("infecting {:?}", self.pos);
+                self.dir = self.dir.turn_left();
+                self.num_infected += 1;
+            }
+        } else {
+            match self.advance_b() {
+                InfectionState::Clean => {
+                    self.dir = self.dir.turn_left();
+                },
+                InfectionState::Weakened => {
+                    self.num_infected += 1;
+                },
+                InfectionState::Infected => {
+                    self.dir = self.dir.turn_right();
+                },
+                InfectionState::Flagged => {
+                    self.dir = self.dir.reverse();
+                },
+            }
         }
 
         let offset = self.dir.step_offset();
         self.pos = (self.pos.0 + offset.0, self.pos.1 + offset.1);
 
-        Some(self.num_activated)
+        Some(self.num_infected)
     }
 }
 
-fn count_infected(input : &str, iterations : usize) -> u32 {
-    let worm = WormProgress::load(input);
+fn count_infected(worm : WormProgress, iterations : usize) -> u32 {
     worm.take(iterations).last().unwrap()
 }
 
+fn count_infected_a(input : &str, iterations : usize) -> u32 {
+    let worm = WormProgress::load(input, true);
+    count_infected(worm, iterations)
+}
+
+fn count_infected_b(input : &str, iterations : usize) -> u32 {
+    let worm = WormProgress::load(input, false);
+    count_infected(worm, iterations)
+}
+
 fn solve_a(input : &str) -> u32 {
-    count_infected(input, 10000)
+    count_infected_a(input, 10000)
 }
 
 fn solve_b(input : &str) -> u32 {
-    0
+    count_infected_b(input, 10000000)
 }
 
 fn main() {
@@ -112,15 +169,20 @@ mod test {
 r"..#
 #..
 ...";
-        assert_eq!(count_infected(&input, 1), 1);
-        assert_eq!(count_infected(&input, 7), 5);
-        assert_eq!(count_infected(&input, 70), 41);
+        assert_eq!(count_infected_a(&input, 1), 1);
+        assert_eq!(count_infected_a(&input, 7), 5);
+        assert_eq!(count_infected_a(&input, 70), 41);
         assert_eq!(solve_a(&input), 5587);
     }
 
     #[test]
-    fn b_1() {
-        let input = "blah";
-        assert_eq!(solve_b(&input), 0);
+    fn b_given() {
+        let input =
+r"..#
+#..
+...";
+        assert_eq!(count_infected_b(&input, 1), 0);
+        assert_eq!(count_infected_b(&input, 100), 26);
+        assert_eq!(solve_b(&input), 2511944);
     }
 }
