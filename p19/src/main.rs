@@ -4,13 +4,7 @@ use std::fmt;
 
 extern crate aoclib;
 use aoclib::*;
-
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
+use aoclib::direction::Direction;
 
 struct RoutingTable {
     grid : Vec<Vec<char>>,
@@ -28,17 +22,6 @@ struct RouteWalker<'t> {
     collected_letters : String,
 }
 
-impl fmt::Display for Direction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Direction::Up => write!(f, "U"),
-            &Direction::Down => write!(f, "D"),
-            &Direction::Left => write!(f, "L"),
-            &Direction::Right => write!(f, "R"),
-        }
-    }
-}
-
 impl fmt::Display for WalkerPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}, x:{}, y:{}", self.dir, self.x, self.y)
@@ -48,7 +31,7 @@ impl fmt::Display for WalkerPosition {
 impl RoutingTable {
     fn load(input : &str) -> RoutingTable {
         RoutingTable {
-            grid: input.lines().map(|line| {
+            grid : input.lines().map(|line| {
                 line.chars().collect()
             }).collect()
         }
@@ -110,7 +93,7 @@ impl<'t> RouteWalker<'t> {
 }
 
 impl<'t> Iterator for RouteWalker<'t> {
-    type Item = &'t String;
+    type Item = ();
 
     fn next(&mut self) -> Option<Self::Item> {
         //eprintln!("{}", self.position);
@@ -157,7 +140,7 @@ impl<'t> Iterator for RouteWalker<'t> {
             if self.position.y < self.table.grid.len() &&
                self.position.x < self.table.grid[0].len() {
                 self.move_one_step();
-                Some(&self.collected_letters)
+                Some(())
             } else {
                 None
             }
@@ -169,7 +152,9 @@ impl<'t> Iterator for RouteWalker<'t> {
 
 fn solve_a(input : &str) -> String {
     let routing_table = RoutingTable::load(input);
-    routing_table.walk().last().unwrap().clone()
+    let mut walker = routing_table.walk();
+    aoclib::consume_iterator(&mut walker);
+    walker.collected_letters.clone()
 }
 
 fn solve_b(input : &str) -> u32 {

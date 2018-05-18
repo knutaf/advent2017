@@ -91,7 +91,7 @@ fn solve_a(input : &str) -> u32 {
 }
 
 fn solve_b(input : &str) -> u32 {
-    let mut grid = aoclib::grid::Grid::<u32>::new(128);
+    let mut grid = aoclib::grid::Grid::<u32>::new();
     let rows = DiskRows::new(input, 128);
 
     for row in rows {

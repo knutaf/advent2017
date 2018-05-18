@@ -1,6 +1,4 @@
 #![feature(nll)]
-#![feature(universal_impl_trait)]
-#![feature(conservative_impl_trait)]
 
 #[macro_use] extern crate lazy_static;
 extern crate regex;
@@ -22,10 +20,6 @@ struct Generator {
 }
 
 impl Generator {
-    fn new(value : u64, factor : u32) -> Generator {
-        Generator { value, factor }
-    }
-
     fn from(input : &str, factor : u32) -> Generator {
         lazy_static! {
             static ref RE_GENERATOR_SEED : regex::Regex = Regex::new(r"^Generator \w+ starts with (\d+)$").expect("failed to compile regex");
@@ -50,8 +44,8 @@ impl Iterator for Generator {
 }
 
 fn count_matches(gen_a : impl Iterator<Item = u64>, gen_b : impl Iterator<Item = u64>, num_rounds : usize) -> usize {
-    gen_a.zip(gen_b).take(num_rounds).inspect(|&(a, b)| {
-        //eprintln!("a: {:x}, b: {:x}", a, b);
+    gen_a.zip(gen_b).take(num_rounds).inspect(|&(_a, _b)| {
+        //eprintln!("a: {:x}, b: {:x}", _a, _b);
     }).filter(|&(a, b)| {
         (a & COMPARISON_MASK) == (b & COMPARISON_MASK)
     }).count()
