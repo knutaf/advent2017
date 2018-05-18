@@ -1,69 +1,90 @@
 #![feature(nll)]
 
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 
 extern crate aoclib;
 use aoclib::*;
 use aoclib::onoffpixel::OnOffPixel;
+use aoclib::direction::Direction;
 
-struct PixelInGrid {
-    pos : (i32, i32),
-    value : OnOffPixel,
-}
+type InfectionGrid = HashMap<(i32, i32), OnOffPixel>;
 
 struct WormProgress {
-    pixels : HashSet<PixelInGrid>,
+    pixels : InfectionGrid,
     pos : (i32, i32),
+    dir : Direction,
     num_activated : u32,
-}
-
-impl PartialEq for PixelInGrid {
-    fn eq(&self, other: &PixelInGrid) -> bool {
-        self.pos == other.pos
-    }
-}
-
-impl Eq for PixelInGrid {}
-
-impl Hash for PixelInGrid {
-    fn hash<H>(&self, state : &mut H)
-    where H : Hasher {
-        self.pos.hash(state)
-    }
 }
 
 impl WormProgress {
     fn load(input : &str) -> WormProgress {
-        let offset = ((input.lines().nth(0).unwrap().len() / 2) - 1) as i32;
-        let mut pixels = HashSet::new();
+        let offset = ((input.lines().nth(0).unwrap().len() - 1) / 2) as i32;
+
+        let mut ret = WormProgress {
+            pixels : InfectionGrid::new(),
+            pos : (0, 0),
+            dir : Direction::Up,
+            num_activated : 0,
+        };
 
         for (y, line) in input.lines().enumerate() {
             for (x, ch) in line.chars().enumerate() {
                 let value = OnOffPixel::parse(ch);
                 if value == OnOffPixel::On {
-                    pixels.insert(PixelInGrid {
-                        pos : (offset - (x as i32), (offset - (y as i32))),
-                        value,
-                    });
+                    // y has to be flipped
+                    let pos = ((x as i32) - offset, offset - (y as i32));
+                    eprintln!("on at {:?}", pos);
+                    ret.pixels.insert(pos, value);
                 }
             }
         }
 
-        WormProgress {
-            pixels,
-            pos : (0, 0),
-            num_activated : 0,
+        ret
+    }
+
+    fn toggle_current(&mut self) -> bool {
+        let ret;
+        if let Some(val) = self.pixels.get_mut(&self.pos) {
+            ret = val.is_on();
+            *val = val.opposite();
+        } else {
+            ret = false;
+            self.pixels.insert(self.pos, OnOffPixel::On);
         }
+        ret
     }
 }
 
-fn count_infected(input : &str, iterations : usize) -> usize {
-    0
+impl Iterator for WormProgress {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // if was infected
+        if self.toggle_current() {
+            self.dir = self.dir.turn_right();
+        }
+
+        // else was not infected
+        else {
+            //eprintln!("infecting {:?}", self.pos);
+            self.dir = self.dir.turn_left();
+            self.num_activated += 1;
+        }
+
+        let offset = self.dir.step_offset();
+        self.pos = (self.pos.0 + offset.0, self.pos.1 + offset.1);
+
+        Some(self.num_activated)
+    }
+}
+
+fn count_infected(input : &str, iterations : usize) -> u32 {
+    let worm = WormProgress::load(input);
+    worm.take(iterations).last().unwrap()
 }
 
 fn solve_a(input : &str) -> u32 {
-    0
+    count_infected(input, 10000)
 }
 
 fn solve_b(input : &str) -> u32 {
@@ -91,7 +112,7 @@ mod test {
 r"..#
 #..
 ...";
-        assert_eq!(count_infected(&input, 0), 0);
+        assert_eq!(count_infected(&input, 1), 1);
         assert_eq!(count_infected(&input, 7), 5);
         assert_eq!(count_infected(&input, 70), 41);
         assert_eq!(solve_a(&input), 5587);
