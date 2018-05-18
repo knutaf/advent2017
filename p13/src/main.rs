@@ -106,7 +106,7 @@ fn solve_b(input : &str) -> u32 {
     let firewall = Firewall::from(input);
 
     (0 .. u32::max_value()).find(|&start_t| {
-        !firewall.simulate(start_t).any(|(severity, caught)| {
+        !firewall.simulate(start_t).any(|(_, caught)| {
             caught
         })
     }).unwrap()

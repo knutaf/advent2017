@@ -48,7 +48,6 @@ struct ExecutionStep {
 }
 
 struct ExecutionB<'t> {
-    id : i64,
     instructions : &'t Vec<Instruction>,
     position : usize,
     registers : RegisterHolder,
@@ -270,7 +269,6 @@ impl<'t> Iterator for Execution<'t> {
 impl<'t> ExecutionB<'t> {
     fn new(instructions : &'t Vec<Instruction>, program_id : i64) -> ExecutionB<'t> {
         let mut exec = ExecutionB {
-            id : program_id,
             instructions : instructions,
             position : 0,
             registers : RegisterHolder::new(),
@@ -285,10 +283,6 @@ impl<'t> ExecutionB<'t> {
 
     fn rcv(&mut self, value : i64) {
         self.rcv_queue.insert(0, value);
-    }
-
-    fn get_snd_count(&self) -> u32 {
-        self.snd_count
     }
 }
 

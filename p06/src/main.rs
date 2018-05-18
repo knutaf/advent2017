@@ -40,7 +40,7 @@ impl State {
 fn solve_a(input : &str) -> u32 {
     let mut states : Vec<State> = vec![State::from_input(input)];
 
-    while !aoclib::any_eq(states.iter().take(states.len() - 1), states.last().unwrap()) {
+    while !aoclib::any_eq(states.iter().take(states.len() - 1), &states.last().unwrap()) {
         let redist = states.last().unwrap().redistribute();
         states.push(redist);
     }
@@ -51,13 +51,13 @@ fn solve_a(input : &str) -> u32 {
 fn solve_b(input : &str) -> u32 {
     let mut states : Vec<State> = vec![State::from_input(input)];
 
-    let mut pos = aoclib::position_eq(states.iter().take(states.len() - 1), states.last().unwrap());
+    let mut pos = aoclib::position_eq(states.iter().take(states.len() - 1), &states.last().unwrap());
     while pos.is_none() {
         //eprintln!("{:?}", states.last().unwrap());
 
         let redist = states.last().unwrap().redistribute();
         states.push(redist);
-        pos = aoclib::position_eq(states.iter().take(states.len() - 1), states.last().unwrap());
+        pos = aoclib::position_eq(states.iter().take(states.len() - 1), &states.last().unwrap());
     }
 
     //eprintln!("{:?}", states.last().unwrap());

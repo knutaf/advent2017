@@ -7,6 +7,8 @@ pub mod list;
 pub mod knot_hash;
 pub mod bit_iterator;
 pub mod grid;
+pub mod onoffpixel;
+pub mod direction;
 
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();
@@ -81,6 +83,10 @@ where T : std::fmt::LowerHex {
     result
 }
 
+pub fn consume_iterator<T>(iter : &mut impl Iterator<Item = T>) {
+    while let Some(_) = iter.next() { }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -135,5 +141,12 @@ mod test {
     #[test]
     fn format_hex_u32() {
         assert_eq!(numbers_to_hex_string(0x0u32 .. 0x2u32), "0000000000000001");
+    }
+
+    #[test]
+    fn test_consume_iterator() {
+        let mut iter = 1 .. 5;
+        consume_iterator(&mut iter);
+        assert_eq!(iter.next(), None);
     }
 }

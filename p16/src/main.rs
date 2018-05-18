@@ -1,5 +1,4 @@
 #![feature(nll)]
-#![feature(universal_impl_trait)]
 
 use std::fmt;
 use std::time::Instant;
