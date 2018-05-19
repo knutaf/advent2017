@@ -15,6 +15,7 @@ pub enum Instruction {
     Mod(char, RegisterOrValue),
     Rcv(char),
     Jgz(RegisterOrValue, RegisterOrValue),
+    Jnz(RegisterOrValue, RegisterOrValue),
 }
 
 pub struct Program {
@@ -62,6 +63,7 @@ impl Instruction {
             static ref RE_MOD : regex::Regex = Regex::new(r"^mod ([a-zA-Z]) (.*)$").expect("failed to compile regex");
             static ref RE_RCV : regex::Regex = Regex::new(r"^rcv ([a-zA-Z])$").expect("failed to compile regex");
             static ref RE_JGZ : regex::Regex = Regex::new(r"^jgz (.*) (.*)$").expect("failed to compile regex");
+            static ref RE_JNZ : regex::Regex = Regex::new(r"^jnz (.*) (.*)$").expect("failed to compile regex");
         }
 
         if let Some(captures) = RE_SND.captures_iter(input).next() {
@@ -78,6 +80,8 @@ impl Instruction {
             Instruction::Mod(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
         } else if let Some(captures) = RE_JGZ.captures_iter(input).next() {
             Instruction::Jgz(RegisterOrValue::from(captures.get(1).unwrap().as_str()), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
+        } else if let Some(captures) = RE_JNZ.captures_iter(input).next() {
+            Instruction::Jnz(RegisterOrValue::from(captures.get(1).unwrap().as_str()), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
         } else if let Some(captures) = RE_RCV.captures_iter(input).next() {
             Instruction::Rcv(captures.get(1).unwrap().as_str().chars().nth(0).unwrap())
         } else {
@@ -97,6 +101,7 @@ impl fmt::Display for Instruction {
             &Instruction::Mod(ref a, ref b) => write!(f, "mod {} {}", a, b),
             &Instruction::Rcv(ref a) => write!(f, "rcv {}", a),
             &Instruction::Jgz(ref a, ref b) => write!(f, "jgz {} {}", a, b),
+            &Instruction::Jnz(ref a, ref b) => write!(f, "jnz {} {}", a, b),
         }
     }
 }
@@ -194,6 +199,13 @@ impl RegisterHolder {
                     1
                 }
             },
+            &Instruction::Jnz(ref cond, ref jump_offset) => {
+                if self.evaluate(&cond) != 0 {
+                    self.evaluate(&jump_offset)
+                } else {
+                    1
+                }
+            },
         }
     }
 }
@@ -262,5 +274,15 @@ jgz -10 a";
         assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(2))), 2);
         assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2))), 2);
         assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2))), 1);
+    }
+
+    #[test]
+    fn jnz() {
+        let mut holder = RegisterHolder::new();
+        *holder.get_reg_mut('a') = 1;
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Val(0), RegisterOrValue::Val(2))), 1);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(2))), 2);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2))), 2);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2))), 1);
     }
 }
