@@ -67,22 +67,6 @@ impl<'t> Iterator for Execution<'t> {
                     self.last_freq = self.registers.evaluate(&rv);
                     eprintln!("  last_freq = {}", self.last_freq);
                 }
-                &Instruction::Set(ref reg, ref rv) => {
-                    eprintln!("  {} <= {}", reg, self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = self.registers.evaluate(&rv);
-                }
-                &Instruction::Add(ref reg, ref rv) => {
-                    eprintln!("  add {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) + self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) + self.registers.evaluate(&rv);
-                }
-                &Instruction::Mul(ref reg, ref rv) => {
-                    eprintln!("  mul {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) * self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) * self.registers.evaluate(&rv);
-                }
-                &Instruction::Mod(ref reg, ref rv) => {
-                    eprintln!("  mod {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) % self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) % self.registers.evaluate(&rv);
-                }
                 &Instruction::Rcv(ref reg) => {
                     if self.registers.evaluate(&RegisterOrValue::Reg(*reg)) != 0 {
                         eprintln!("  set to {}", self.last_freq);
@@ -92,6 +76,12 @@ impl<'t> Iterator for Execution<'t> {
                     }
                 }
                 &Instruction::Jgz(..) => {},
+                &Instruction::Set(..) |
+                &Instruction::Add(..) |
+                &Instruction::Mul(..) |
+                &Instruction::Mod(..) => {
+                    self.registers.apply_instruction(inst);
+                },
             }
 
             self.position = match inst {

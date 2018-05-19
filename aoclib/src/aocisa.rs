@@ -139,6 +139,32 @@ impl RegisterHolder {
             }
         }
     }
+
+    pub fn apply_instruction(&mut self, instruction : &Instruction) -> bool {
+        match instruction {
+            &Instruction::Set(ref reg, ref rv) => {
+                //eprintln!("  {} <= {}", reg, self.evaluate(&rv));
+                *self.get_reg_mut(*reg) = self.evaluate(&rv);
+                true
+            },
+            &Instruction::Add(ref reg, ref rv) => {
+                //eprintln!("  add {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) + self.evaluate(&rv));
+                *self.get_reg_mut(*reg) = *self.get_reg(*reg) + self.evaluate(&rv);
+                true
+            },
+            &Instruction::Mul(ref reg, ref rv) => {
+                //eprintln!("  mul {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) * self.evaluate(&rv));
+                *self.get_reg_mut(*reg) = *self.get_reg(*reg) * self.evaluate(&rv);
+                true
+            },
+            &Instruction::Mod(ref reg, ref rv) => {
+                //eprintln!("  mod {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) % self.evaluate(&rv));
+                *self.get_reg_mut(*reg) = *self.get_reg(*reg) % self.evaluate(&rv);
+                true
+            },
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +197,22 @@ jgz -10 a";
         let mut holder = RegisterHolder::new();
         for i in ('a' as u8) .. ('z' as u8)+1 {
             *holder.get_reg_mut(char::from(i)) = i64::from(i);
+        }
+
+        for i in ('a' as u8) .. ('z' as u8)+1 {
+            assert_eq!(*holder.get_reg(char::from(i)), i64::from(i));
+        }
+    }
+
+    #[test]
+    fn store_load_inst() {
+        let mut holder = RegisterHolder::new();
+
+        holder.apply_instruction(&Instruction::Set('a', RegisterOrValue::Val(i64::from('a' as u8))));
+
+        for i in ('b' as u8) .. ('z' as u8)+1 {
+            holder.apply_instruction(&Instruction::Set(char::from(i), RegisterOrValue::Reg(char::from(i - 1))));
+            holder.apply_instruction(&Instruction::Add(char::from(i), RegisterOrValue::Val(1)));
         }
 
         for i in ('a' as u8) .. ('z' as u8)+1 {
