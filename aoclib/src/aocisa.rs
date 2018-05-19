@@ -165,6 +165,26 @@ impl RegisterHolder {
             _ => false,
         }
     }
+
+    pub fn get_next_ip_offset(&self, instruction : &Instruction) -> i64 {
+        match instruction {
+            &Instruction::Set(..) |
+            &Instruction::Add(..) |
+            &Instruction::Mul(..) |
+            &Instruction::Snd(..) |
+            &Instruction::Rcv(..) |
+            &Instruction::Mod(..) => {
+                1
+            },
+            &Instruction::Jgz(ref cond, ref jump_offset) => {
+                if self.evaluate(&cond) > 0 {
+                    self.evaluate(&jump_offset)
+                } else {
+                    1
+                }
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -218,5 +238,16 @@ jgz -10 a";
         for i in ('a' as u8) .. ('z' as u8)+1 {
             assert_eq!(*holder.get_reg(char::from(i)), i64::from(i));
         }
+    }
+
+    #[test]
+    fn jgz() {
+        let mut holder = RegisterHolder::new();
+        *holder.get_reg_mut('a') = 1;
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Set('a', RegisterOrValue::Val(1))), 1);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Val(0), RegisterOrValue::Val(2))), 1);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(2))), 2);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2))), 2);
+        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2))), 1);
     }
 }

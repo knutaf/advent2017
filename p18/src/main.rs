@@ -187,31 +187,16 @@ impl<'t> Iterator for ExecutionB<'t> {
                 if is_blocked {
                     self.position
                 } else {
-                    match inst {
-                        &Instruction::Jgz(ref cond, ref jump_offset) => {
-                            if self.registers.evaluate(&cond) > 0 {
-                                let offset = self.registers.evaluate(&jump_offset);
-                                if offset >= 0 {
-                                    self.position + (offset as usize)
-                                } else {
-                                    if ((offset * -1) as usize) <= self.position {
-                                        ((self.position as i64) + offset) as usize
-                                    } else {
-                                        self.instructions.len()
-                                    }
-                                }
-                            } else {
-                                self.position + 1
-                            }
-                        },
-                        &Instruction::Snd(..) |
-                        &Instruction::Set(..) |
-                        &Instruction::Add(..) |
-                        &Instruction::Mul(..) |
-                        &Instruction::Mod(..) |
-                        &Instruction::Rcv(..) => {
-                            self.position + 1
-                        },
+                    let offset = self.registers.get_next_ip_offset(inst);
+
+                    if offset >= 0 {
+                        self.position + (offset as usize)
+                    } else {
+                        if ((offset * -1) as usize) <= self.position {
+                            ((self.position as i64) + offset) as usize
+                        } else {
+                            self.instructions.len()
+                        }
                     }
                 };
 
