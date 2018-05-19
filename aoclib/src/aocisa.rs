@@ -10,6 +10,7 @@ pub enum Instruction {
     Snd(RegisterOrValue),
     Set(char, RegisterOrValue),
     Add(char, RegisterOrValue),
+    Sub(char, RegisterOrValue),
     Mul(char, RegisterOrValue),
     Mod(char, RegisterOrValue),
     Rcv(char),
@@ -56,6 +57,7 @@ impl Instruction {
             static ref RE_SND : regex::Regex = Regex::new(r"^snd (.*)$").expect("failed to compile regex");
             static ref RE_SET : regex::Regex = Regex::new(r"^set ([a-zA-Z]) (.*)$").expect("failed to compile regex");
             static ref RE_ADD : regex::Regex = Regex::new(r"^add ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_SUB : regex::Regex = Regex::new(r"^sub ([a-zA-Z]) (.*)$").expect("failed to compile regex");
             static ref RE_MUL : regex::Regex = Regex::new(r"^mul ([a-zA-Z]) (.*)$").expect("failed to compile regex");
             static ref RE_MOD : regex::Regex = Regex::new(r"^mod ([a-zA-Z]) (.*)$").expect("failed to compile regex");
             static ref RE_RCV : regex::Regex = Regex::new(r"^rcv ([a-zA-Z])$").expect("failed to compile regex");
@@ -68,6 +70,8 @@ impl Instruction {
             Instruction::Set(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
         } else if let Some(captures) = RE_ADD.captures_iter(input).next() {
             Instruction::Add(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
+        } else if let Some(captures) = RE_SUB.captures_iter(input).next() {
+            Instruction::Sub(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
         } else if let Some(captures) = RE_MUL.captures_iter(input).next() {
             Instruction::Mul(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
         } else if let Some(captures) = RE_MOD.captures_iter(input).next() {
@@ -88,6 +92,7 @@ impl fmt::Display for Instruction {
             &Instruction::Snd(ref a) => write!(f, "snd {}", a),
             &Instruction::Set(ref a, ref b) => write!(f, "set {} {}", a, b),
             &Instruction::Add(ref a, ref b) => write!(f, "add {} {}", a, b),
+            &Instruction::Sub(ref a, ref b) => write!(f, "sub {} {}", a, b),
             &Instruction::Mul(ref a, ref b) => write!(f, "mul {} {}", a, b),
             &Instruction::Mod(ref a, ref b) => write!(f, "mod {} {}", a, b),
             &Instruction::Rcv(ref a) => write!(f, "rcv {}", a),
@@ -152,6 +157,11 @@ impl RegisterHolder {
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) + self.evaluate(&rv);
                 true
             },
+            &Instruction::Sub(ref reg, ref rv) => {
+                //eprintln!("  sub {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) - self.evaluate(&rv));
+                *self.get_reg_mut(*reg) = *self.get_reg(*reg) - self.evaluate(&rv);
+                true
+            },
             &Instruction::Mul(ref reg, ref rv) => {
                 //eprintln!("  mul {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) * self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) * self.evaluate(&rv);
@@ -170,6 +180,7 @@ impl RegisterHolder {
         match instruction {
             &Instruction::Set(..) |
             &Instruction::Add(..) |
+            &Instruction::Sub(..) |
             &Instruction::Mul(..) |
             &Instruction::Snd(..) |
             &Instruction::Rcv(..) |
@@ -200,6 +211,8 @@ set a z
 set a -10
 add a z
 add a -10
+sub a z
+sub a -10
 mul a z
 mul a -10
 mod a z

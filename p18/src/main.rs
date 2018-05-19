@@ -66,7 +66,7 @@ impl<'t> Iterator for Execution<'t> {
                 &Instruction::Snd(ref rv) => {
                     self.last_freq = self.registers.evaluate(&rv);
                     eprintln!("  last_freq = {}", self.last_freq);
-                }
+                },
                 &Instruction::Rcv(ref reg) => {
                     if self.registers.evaluate(&RegisterOrValue::Reg(*reg)) != 0 {
                         eprintln!("  set to {}", self.last_freq);
@@ -74,41 +74,31 @@ impl<'t> Iterator for Execution<'t> {
                     } else {
                         eprintln!("  skip");
                     }
-                }
-                &Instruction::Jgz(..) => {},
+                },
+                &Instruction::Jgz(..) |
                 &Instruction::Set(..) |
                 &Instruction::Add(..) |
                 &Instruction::Mul(..) |
                 &Instruction::Mod(..) => {
                     self.registers.apply_instruction(inst);
                 },
+                _ => {
+                    panic!("unhandled instruction {}", inst);
+                },
             }
 
-            self.position = match inst {
-                &Instruction::Jgz(ref cond, ref jump_offset) => {
-                    if self.registers.evaluate(&cond) > 0 {
-                        let offset = self.registers.evaluate(&jump_offset);
-                        if offset >= 0 {
-                            self.position + (offset as usize)
-                        } else {
-                            if ((offset * -1) as usize) <= self.position {
-                                ((self.position as i64) + offset) as usize
-                            } else {
-                                self.instructions.len()
-                            }
-                        }
+            self.position = {
+                let offset = self.registers.get_next_ip_offset(inst);
+
+                if offset >= 0 {
+                    self.position + (offset as usize)
+                } else {
+                    if ((offset * -1) as usize) <= self.position {
+                        ((self.position as i64) + offset) as usize
                     } else {
-                        self.position + 1
+                        self.instructions.len()
                     }
-                },
-                &Instruction::Snd(..) |
-                &Instruction::Set(..) |
-                &Instruction::Add(..) |
-                &Instruction::Mul(..) |
-                &Instruction::Mod(..) |
-                &Instruction::Rcv(..) => {
-                    self.position + 1
-                },
+                }
             };
 
             Some(self.last_recovery)
@@ -154,23 +144,7 @@ impl<'t> Iterator for ExecutionB<'t> {
                     self.snd_count += 1;
                     new_snd_opt = Some(self.registers.evaluate(&rv));
                     eprintln!("  sending {:?}", new_snd_opt.as_ref());
-                }
-                &Instruction::Set(ref reg, ref rv) => {
-                    eprintln!("  {} <= {}", reg, self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = self.registers.evaluate(&rv);
-                }
-                &Instruction::Add(ref reg, ref rv) => {
-                    eprintln!("  add {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) + self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) + self.registers.evaluate(&rv);
-                }
-                &Instruction::Mul(ref reg, ref rv) => {
-                    eprintln!("  mul {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) * self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) * self.registers.evaluate(&rv);
-                }
-                &Instruction::Mod(ref reg, ref rv) => {
-                    eprintln!("  mod {} {} ({})", *self.registers.get_reg(*reg), self.registers.evaluate(&rv), *self.registers.get_reg(*reg) % self.registers.evaluate(&rv));
-                    *self.registers.get_reg_mut(*reg) = *self.registers.get_reg(*reg) % self.registers.evaluate(&rv);
-                }
+                },
                 &Instruction::Rcv(ref reg) => {
                     if let Some(val) = self.rcv_queue.pop() {
                         *self.registers.get_reg_mut(*reg) = val;
@@ -179,8 +153,17 @@ impl<'t> Iterator for ExecutionB<'t> {
                         is_blocked = true;
                         eprintln!("  blocked on rcv into {}", reg);
                     }
-                }
-                &Instruction::Jgz(..) => {},
+                },
+                &Instruction::Jgz(..) |
+                &Instruction::Set(..) |
+                &Instruction::Add(..) |
+                &Instruction::Mul(..) |
+                &Instruction::Mod(..) => {
+                    self.registers.apply_instruction(inst);
+                },
+                _ => {
+                    panic!("unhandled instruction {}", inst);
+                },
             }
 
             self.position =
