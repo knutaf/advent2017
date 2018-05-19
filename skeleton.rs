@@ -3,6 +3,15 @@
 extern crate aoclib;
 use aoclib::*;
 
+/*
+impl Iterator for Thing {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+    }
+}
+*/
+
 fn solve_a(input : &str) -> u32 {
     0
 }

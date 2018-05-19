@@ -5,5 +5,3 @@ authors = ["knutaf <knutaf@gmail.com>"]
 
 [dependencies]
 aoclib = { path = "../aoclib" }
-regex = "*"
-lazy_static = "*"
