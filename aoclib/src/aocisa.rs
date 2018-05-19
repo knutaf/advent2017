@@ -181,8 +181,8 @@ impl RegisterHolder {
         }
     }
 
-    pub fn get_next_ip_offset(&self, instruction : &Instruction) -> i64 {
-        match instruction {
+    pub fn get_next_ip(&self, instruction : &Instruction, current_ip : usize) -> usize {
+        let offset = match instruction {
             &Instruction::Set(..) |
             &Instruction::Add(..) |
             &Instruction::Sub(..) |
@@ -206,6 +206,16 @@ impl RegisterHolder {
                     1
                 }
             },
+        };
+
+        if offset >= 0 {
+            current_ip + (offset as usize)
+        } else {
+            if ((offset * -1) as usize) <= current_ip {
+                ((current_ip as i64) + offset) as usize
+            } else {
+                usize::max_value()
+            }
         }
     }
 }
@@ -266,23 +276,30 @@ jgz -10 a";
     }
 
     #[test]
+    fn jumps() {
+        let holder = RegisterHolder::new();
+        assert_eq!(holder.get_next_ip(&Instruction::Set('a', RegisterOrValue::Val(1)), 0), 1);
+        assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(-10)), 0), usize::max_value());
+        assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(-10)), 0), usize::max_value());
+    }
+
+    #[test]
     fn jgz() {
         let mut holder = RegisterHolder::new();
         *holder.get_reg_mut('a') = 1;
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Set('a', RegisterOrValue::Val(1))), 1);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Val(0), RegisterOrValue::Val(2))), 1);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(2))), 2);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2))), 2);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jgz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2))), 1);
+        assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(0), RegisterOrValue::Val(2)), 0), 1);
+        assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(2)), 0), 2);
+        assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2)), 0), 2);
+        assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2)), 0), 1);
     }
 
     #[test]
     fn jnz() {
         let mut holder = RegisterHolder::new();
         *holder.get_reg_mut('a') = 1;
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Val(0), RegisterOrValue::Val(2))), 1);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(2))), 2);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2))), 2);
-        assert_eq!(holder.get_next_ip_offset(&Instruction::Jnz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2))), 1);
+        assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(0), RegisterOrValue::Val(2)), 0), 1);
+        assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(2)), 0), 2);
+        assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Reg('a'), RegisterOrValue::Val(2)), 0), 2);
+        assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Reg('b'), RegisterOrValue::Val(2)), 0), 1);
     }
 }

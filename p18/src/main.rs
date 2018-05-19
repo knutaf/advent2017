@@ -87,19 +87,7 @@ impl<'t> Iterator for Execution<'t> {
                 },
             }
 
-            self.position = {
-                let offset = self.registers.get_next_ip_offset(inst);
-
-                if offset >= 0 {
-                    self.position + (offset as usize)
-                } else {
-                    if ((offset * -1) as usize) <= self.position {
-                        ((self.position as i64) + offset) as usize
-                    } else {
-                        self.instructions.len()
-                    }
-                }
-            };
+            self.position = self.registers.get_next_ip(inst, self.position);
 
             Some(self.last_recovery)
         } else {
@@ -170,17 +158,7 @@ impl<'t> Iterator for ExecutionB<'t> {
                 if is_blocked {
                     self.position
                 } else {
-                    let offset = self.registers.get_next_ip_offset(inst);
-
-                    if offset >= 0 {
-                        self.position + (offset as usize)
-                    } else {
-                        if ((offset * -1) as usize) <= self.position {
-                            ((self.position as i64) + offset) as usize
-                        } else {
-                            self.instructions.len()
-                        }
-                    }
+                    self.registers.get_next_ip(inst, self.position)
                 };
 
             Some(ExecutionStep {
