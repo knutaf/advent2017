@@ -3,12 +3,17 @@
 use std::io::prelude::*;
 use std::env;
 
+#[macro_use] extern crate lazy_static;
+extern crate regex;
+use regex::Regex;
+
 pub mod list;
 pub mod knot_hash;
 pub mod bit_iterator;
 pub mod grid;
 pub mod onoffpixel;
 pub mod direction;
+pub mod aocisa;
 
 pub fn read_all_stdin() -> String {
     let mut contents = String::new();

@@ -1,38 +1,10 @@
 #![feature(nll)]
 
-use std::fmt;
-
-#[macro_use] extern crate lazy_static;
-extern crate regex;
-use regex::Regex;
-
 extern crate aoclib;
 use aoclib::*;
+use aoclib::aocisa::*;
 
 const NUM_EXECUTIONS_B : i64 = 2;
-
-enum RegisterOrValue {
-    Reg(char),
-    Val(i64),
-}
-
-enum Instruction {
-    Snd(RegisterOrValue),
-    Set(char, RegisterOrValue),
-    Add(char, RegisterOrValue),
-    Mul(char, RegisterOrValue),
-    Mod(char, RegisterOrValue),
-    Rcv(char),
-    Jgz(RegisterOrValue, RegisterOrValue),
-}
-
-struct Program {
-    instructions : Vec<Instruction>,
-}
-
-struct RegisterHolder {
-    registers : [i64 ; ((('z' as u8) - ('a' as u8)) + 1) as usize],
-}
 
 struct Execution<'t> {
     instructions : &'t Vec<Instruction>,
@@ -55,128 +27,18 @@ struct ExecutionB<'t> {
     snd_count : u32,
 }
 
-impl RegisterOrValue {
-    fn from(input : &str) -> RegisterOrValue {
-        lazy_static! {
-            static ref RE_REGISTER : regex::Regex = Regex::new(r"^([a-zA-Z])$").expect("failed to compile regex");
-            static ref RE_VALUE : regex::Regex = Regex::new(r"^(-?\d+)$").expect("failed to compile regex");
-        }
-
-        if let Some(captures) = RE_REGISTER.captures_iter(input).next() {
-            RegisterOrValue::Reg(captures.get(1).unwrap().as_str().chars().nth(0).unwrap())
-        } else if let Some(captures) = RE_VALUE.captures_iter(input).next() {
-            RegisterOrValue::Val(captures.get(1).unwrap().as_str().parse::<i64>().unwrap())
-        } else {
-            panic!("invalid register or value {}", input);
-        }
-    }
+trait P18 {
+    fn execute<'t>(&'t self) -> Execution<'t>;
+    fn execute_b<'t>(&'t self, program_id : i64) -> ExecutionB<'t>;
 }
 
-impl fmt::Display for RegisterOrValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &RegisterOrValue::Reg(a) => write!(f, "{}", a),
-            &RegisterOrValue::Val(a) => write!(f, "{}", a),
-        }
-    }
-}
-
-impl Instruction {
-    fn from(input : &str) -> Instruction {
-        lazy_static! {
-            static ref RE_SND : regex::Regex = Regex::new(r"^snd (.*)$").expect("failed to compile regex");
-            static ref RE_SET : regex::Regex = Regex::new(r"^set ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_ADD : regex::Regex = Regex::new(r"^add ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_MUL : regex::Regex = Regex::new(r"^mul ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_MOD : regex::Regex = Regex::new(r"^mod ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_RCV : regex::Regex = Regex::new(r"^rcv ([a-zA-Z])$").expect("failed to compile regex");
-            static ref RE_JGZ : regex::Regex = Regex::new(r"^jgz (.*) (.*)$").expect("failed to compile regex");
-        }
-
-        if let Some(captures) = RE_SND.captures_iter(input).next() {
-            Instruction::Snd(RegisterOrValue::from(captures.get(1).unwrap().as_str()))
-        } else if let Some(captures) = RE_SET.captures_iter(input).next() {
-            Instruction::Set(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
-        } else if let Some(captures) = RE_ADD.captures_iter(input).next() {
-            Instruction::Add(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
-        } else if let Some(captures) = RE_MUL.captures_iter(input).next() {
-            Instruction::Mul(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
-        } else if let Some(captures) = RE_MOD.captures_iter(input).next() {
-            Instruction::Mod(captures.get(1).unwrap().as_str().chars().nth(0).unwrap(), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
-        } else if let Some(captures) = RE_JGZ.captures_iter(input).next() {
-            Instruction::Jgz(RegisterOrValue::from(captures.get(1).unwrap().as_str()), RegisterOrValue::from(captures.get(2).unwrap().as_str()))
-        } else if let Some(captures) = RE_RCV.captures_iter(input).next() {
-            Instruction::Rcv(captures.get(1).unwrap().as_str().chars().nth(0).unwrap())
-        } else {
-            panic!("invalid move {}", input);
-        }
-    }
-}
-
-impl fmt::Display for Instruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Instruction::Snd(ref a) => write!(f, "snd {}", a),
-            &Instruction::Set(ref a, ref b) => write!(f, "set {} {}", a, b),
-            &Instruction::Add(ref a, ref b) => write!(f, "add {} {}", a, b),
-            &Instruction::Mul(ref a, ref b) => write!(f, "mul {} {}", a, b),
-            &Instruction::Mod(ref a, ref b) => write!(f, "mod {} {}", a, b),
-            &Instruction::Rcv(ref a) => write!(f, "rcv {}", a),
-            &Instruction::Jgz(ref a, ref b) => write!(f, "jgz {} {}", a, b),
-        }
-    }
-}
-
-impl Program {
-    fn load(input : &str) -> Program {
-        Program {
-            instructions : input.lines().map(Instruction::from).collect(),
-        }
-    }
-
+impl P18 for Program {
     fn execute<'t>(&'t self) -> Execution<'t> {
         Execution::new(&self.instructions)
     }
 
     fn execute_b<'t>(&'t self, program_id : i64) -> ExecutionB<'t> {
         ExecutionB::new(&self.instructions, program_id)
-    }
-}
-
-impl fmt::Display for Program {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut ret = write!(f, "");
-        for inst in self.instructions.iter() {
-            ret = write!(f, "{}\n", inst);
-        }
-        ret
-    }
-}
-
-impl RegisterHolder {
-    fn new() -> RegisterHolder {
-        RegisterHolder {
-            registers : [0 ; ((('z' as u8) - ('a' as u8)) + 1) as usize],
-        }
-    }
-
-    fn get_reg_mut(&mut self, reg : char) -> &mut i64 {
-        &mut self.registers[reg as usize - 'a' as usize]
-    }
-
-    fn get_reg(&self, reg : char) -> &i64 {
-        &self.registers[reg as usize - 'a' as usize]
-    }
-
-    fn evaluate(&self, rv : &RegisterOrValue) -> i64 {
-        match rv {
-            &RegisterOrValue::Reg(r) => {
-                *self.get_reg(r)
-            },
-            &RegisterOrValue::Val(v) => {
-                v
-            }
-        }
     }
 }
 
