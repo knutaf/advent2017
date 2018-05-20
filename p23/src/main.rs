@@ -49,8 +49,12 @@ fn solve_a(input : &str) -> u32 {
     exec.last().unwrap()
 }
 
-fn solve_b(input : &str) -> u32 {
-    0
+fn solve_b(input : &str) -> i64 {
+    let program = Program::load(&input);
+    let mut exec = Execution::new(&program);
+    *exec.registers.get_reg_mut('a') = 1;
+    aoclib::consume_iterator(&mut exec);
+    *exec.registers.get_reg('h')
 }
 
 fn main() {

@@ -55,15 +55,15 @@ impl fmt::Display for RegisterOrValue {
 impl Instruction {
     pub fn from(input : &str) -> Instruction {
         lazy_static! {
-            static ref RE_SND : regex::Regex = Regex::new(r"^snd (.*)$").expect("failed to compile regex");
-            static ref RE_SET : regex::Regex = Regex::new(r"^set ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_ADD : regex::Regex = Regex::new(r"^add ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_SUB : regex::Regex = Regex::new(r"^sub ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_MUL : regex::Regex = Regex::new(r"^mul ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_MOD : regex::Regex = Regex::new(r"^mod ([a-zA-Z]) (.*)$").expect("failed to compile regex");
-            static ref RE_RCV : regex::Regex = Regex::new(r"^rcv ([a-zA-Z])$").expect("failed to compile regex");
-            static ref RE_JGZ : regex::Regex = Regex::new(r"^jgz (.*) (.*)$").expect("failed to compile regex");
-            static ref RE_JNZ : regex::Regex = Regex::new(r"^jnz (.*) (.*)$").expect("failed to compile regex");
+            static ref RE_SND : regex::Regex = Regex::new(r"^\s*snd (.*)$").expect("failed to compile regex");
+            static ref RE_SET : regex::Regex = Regex::new(r"^\s*set ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_ADD : regex::Regex = Regex::new(r"^\s*add ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_SUB : regex::Regex = Regex::new(r"^\s*sub ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_MUL : regex::Regex = Regex::new(r"^\s*mul ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_MOD : regex::Regex = Regex::new(r"^\s*mod ([a-zA-Z]) (.*)$").expect("failed to compile regex");
+            static ref RE_RCV : regex::Regex = Regex::new(r"^\s*rcv ([a-zA-Z])$").expect("failed to compile regex");
+            static ref RE_JGZ : regex::Regex = Regex::new(r"^\s*jgz (.*) (.*)$").expect("failed to compile regex");
+            static ref RE_JNZ : regex::Regex = Regex::new(r"^\s*jnz (.*) (.*)$").expect("failed to compile regex");
         }
 
         if let Some(captures) = RE_SND.captures_iter(input).next() {
@@ -153,27 +153,27 @@ impl RegisterHolder {
     pub fn apply_instruction(&mut self, instruction : &Instruction) -> bool {
         match instruction {
             &Instruction::Set(ref reg, ref rv) => {
-                //eprintln!("  {} <= {}", reg, self.evaluate(&rv));
+                eprintln!("  {} <= {}", reg, self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = self.evaluate(&rv);
                 true
             },
             &Instruction::Add(ref reg, ref rv) => {
-                //eprintln!("  add {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) + self.evaluate(&rv));
+                eprintln!("  add {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) + self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) + self.evaluate(&rv);
                 true
             },
             &Instruction::Sub(ref reg, ref rv) => {
-                //eprintln!("  sub {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) - self.evaluate(&rv));
+                eprintln!("  sub {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) - self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) - self.evaluate(&rv);
                 true
             },
             &Instruction::Mul(ref reg, ref rv) => {
-                //eprintln!("  mul {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) * self.evaluate(&rv));
+                eprintln!("  mul {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) * self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) * self.evaluate(&rv);
                 true
             },
             &Instruction::Mod(ref reg, ref rv) => {
-                //eprintln!("  mod {} {} ({})", *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) % self.evaluate(&rv));
+                eprintln!("  mod {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) % self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) % self.evaluate(&rv);
                 true
             },
@@ -193,18 +193,32 @@ impl RegisterHolder {
                 1
             },
             &Instruction::Jgz(ref cond, ref jump_offset) => {
+                let offset;
+                let did;
                 if self.evaluate(&cond) > 0 {
-                    self.evaluate(&jump_offset)
+                    did = true;
+                    offset = self.evaluate(&jump_offset);
                 } else {
-                    1
+                    did = false;
+                    offset = 1;
                 }
+
+                eprintln!("  jgz {} ({}) {} ({}) => {}", *cond, self.evaluate(cond), *jump_offset, self.evaluate(jump_offset), did);
+                offset
             },
             &Instruction::Jnz(ref cond, ref jump_offset) => {
+                let offset;
+                let did;
                 if self.evaluate(&cond) != 0 {
-                    self.evaluate(&jump_offset)
+                    did = true;
+                    offset = self.evaluate(&jump_offset);
                 } else {
-                    1
+                    did = false;
+                    offset = 1;
                 }
+
+                eprintln!("  jnz {} ({}) {} ({}) => {}", *cond, self.evaluate(cond), *jump_offset, self.evaluate(jump_offset), did);
+                offset
             },
         };
 
