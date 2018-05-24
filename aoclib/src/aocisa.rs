@@ -22,8 +22,9 @@ pub struct Program {
     pub instructions : Vec<Instruction>,
 }
 
+#[derive(Default)]
 pub struct RegisterHolder {
-    registers : [i64 ; ((('z' as u8) - ('a' as u8)) + 1) as usize],
+    registers : [i64 ; ((b'z' - b'a') + 1) as usize],
 }
 
 impl RegisterOrValue {
@@ -45,9 +46,9 @@ impl RegisterOrValue {
 
 impl fmt::Display for RegisterOrValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &RegisterOrValue::Reg(a) => write!(f, "{}", a),
-            &RegisterOrValue::Val(a) => write!(f, "{}", a),
+        match *self {
+            RegisterOrValue::Reg(a) => write!(f, "{}", a),
+            RegisterOrValue::Val(a) => write!(f, "{}", a),
         }
     }
 }
@@ -92,16 +93,16 @@ impl Instruction {
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Instruction::Snd(ref a) => write!(f, "snd {}", a),
-            &Instruction::Set(ref a, ref b) => write!(f, "set {} {}", a, b),
-            &Instruction::Add(ref a, ref b) => write!(f, "add {} {}", a, b),
-            &Instruction::Sub(ref a, ref b) => write!(f, "sub {} {}", a, b),
-            &Instruction::Mul(ref a, ref b) => write!(f, "mul {} {}", a, b),
-            &Instruction::Mod(ref a, ref b) => write!(f, "mod {} {}", a, b),
-            &Instruction::Rcv(ref a) => write!(f, "rcv {}", a),
-            &Instruction::Jgz(ref a, ref b) => write!(f, "jgz {} {}", a, b),
-            &Instruction::Jnz(ref a, ref b) => write!(f, "jnz {} {}", a, b),
+        match *self {
+            Instruction::Snd(ref a) => write!(f, "snd {}", a),
+            Instruction::Set(ref a, ref b) => write!(f, "set {} {}", a, b),
+            Instruction::Add(ref a, ref b) => write!(f, "add {} {}", a, b),
+            Instruction::Sub(ref a, ref b) => write!(f, "sub {} {}", a, b),
+            Instruction::Mul(ref a, ref b) => write!(f, "mul {} {}", a, b),
+            Instruction::Mod(ref a, ref b) => write!(f, "mod {} {}", a, b),
+            Instruction::Rcv(ref a) => write!(f, "rcv {}", a),
+            Instruction::Jgz(ref a, ref b) => write!(f, "jgz {} {}", a, b),
+            Instruction::Jnz(ref a, ref b) => write!(f, "jnz {} {}", a, b),
         }
     }
 }
@@ -117,20 +118,14 @@ impl Program {
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut ret = write!(f, "");
-        for inst in self.instructions.iter() {
-            ret = write!(f, "{}\n", inst);
+        for inst in &self.instructions {
+            ret = writeln!(f, "{}", inst);
         }
         ret
     }
 }
 
 impl RegisterHolder {
-    pub fn new() -> RegisterHolder {
-        RegisterHolder {
-            registers : [0 ; ((('z' as u8) - ('a' as u8)) + 1) as usize],
-        }
-    }
-
     pub fn get_reg_mut(&mut self, reg : char) -> &mut i64 {
         &mut self.registers[reg as usize - 'a' as usize]
     }
@@ -140,39 +135,39 @@ impl RegisterHolder {
     }
 
     pub fn evaluate(&self, rv : &RegisterOrValue) -> i64 {
-        match rv {
-            &RegisterOrValue::Reg(r) => {
+        match *rv {
+            RegisterOrValue::Reg(r) => {
                 *self.get_reg(r)
             },
-            &RegisterOrValue::Val(v) => {
+            RegisterOrValue::Val(v) => {
                 v
             }
         }
     }
 
     pub fn apply_instruction(&mut self, instruction : &Instruction) -> bool {
-        match instruction {
-            &Instruction::Set(ref reg, ref rv) => {
+        match *instruction {
+            Instruction::Set(ref reg, ref rv) => {
                 eprintln!("  {} <= {}", reg, self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = self.evaluate(&rv);
                 true
             },
-            &Instruction::Add(ref reg, ref rv) => {
+            Instruction::Add(ref reg, ref rv) => {
                 eprintln!("  add {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) + self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) + self.evaluate(&rv);
                 true
             },
-            &Instruction::Sub(ref reg, ref rv) => {
+            Instruction::Sub(ref reg, ref rv) => {
                 eprintln!("  sub {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) - self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) - self.evaluate(&rv);
                 true
             },
-            &Instruction::Mul(ref reg, ref rv) => {
+            Instruction::Mul(ref reg, ref rv) => {
                 eprintln!("  mul {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) * self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) * self.evaluate(&rv);
                 true
             },
-            &Instruction::Mod(ref reg, ref rv) => {
+            Instruction::Mod(ref reg, ref rv) => {
                 eprintln!("  mod {} ({}) {} => {}", *reg, *self.get_reg(*reg), self.evaluate(&rv), *self.get_reg(*reg) % self.evaluate(&rv));
                 *self.get_reg_mut(*reg) = *self.get_reg(*reg) % self.evaluate(&rv);
                 true
@@ -182,17 +177,17 @@ impl RegisterHolder {
     }
 
     pub fn get_next_ip(&self, instruction : &Instruction, current_ip : usize) -> usize {
-        let offset = match instruction {
-            &Instruction::Set(..) |
-            &Instruction::Add(..) |
-            &Instruction::Sub(..) |
-            &Instruction::Mul(..) |
-            &Instruction::Snd(..) |
-            &Instruction::Rcv(..) |
-            &Instruction::Mod(..) => {
+        let offset = match *instruction {
+            Instruction::Set(..) |
+            Instruction::Add(..) |
+            Instruction::Sub(..) |
+            Instruction::Mul(..) |
+            Instruction::Snd(..) |
+            Instruction::Rcv(..) |
+            Instruction::Mod(..) => {
                 1
             },
-            &Instruction::Jgz(ref cond, ref jump_offset) => {
+            Instruction::Jgz(ref cond, ref jump_offset) => {
                 let offset;
                 let did;
                 if self.evaluate(&cond) > 0 {
@@ -206,7 +201,7 @@ impl RegisterHolder {
                 eprintln!("  jgz {} ({}) {} ({}) => {}", *cond, self.evaluate(cond), *jump_offset, self.evaluate(jump_offset), did);
                 offset
             },
-            &Instruction::Jnz(ref cond, ref jump_offset) => {
+            Instruction::Jnz(ref cond, ref jump_offset) => {
                 let offset;
                 let did;
                 if self.evaluate(&cond) != 0 {
@@ -224,12 +219,10 @@ impl RegisterHolder {
 
         if offset >= 0 {
             current_ip + (offset as usize)
+        } else if (-offset as usize) <= current_ip {
+            ((current_ip as i64) + offset) as usize
         } else {
-            if ((offset * -1) as usize) <= current_ip {
-                ((current_ip as i64) + offset) as usize
-            } else {
-                usize::max_value()
-            }
+            usize::max_value()
         }
     }
 }
@@ -263,7 +256,7 @@ jgz -10 a";
 
     #[test]
     fn store_load() {
-        let mut holder = RegisterHolder::new();
+        let mut holder = RegisterHolder::default();
         for i in ('a' as u8) .. ('z' as u8)+1 {
             *holder.get_reg_mut(char::from(i)) = i64::from(i);
         }
@@ -275,7 +268,7 @@ jgz -10 a";
 
     #[test]
     fn store_load_inst() {
-        let mut holder = RegisterHolder::new();
+        let mut holder = RegisterHolder::default();
 
         holder.apply_instruction(&Instruction::Set('a', RegisterOrValue::Val(i64::from('a' as u8))));
 
@@ -291,7 +284,7 @@ jgz -10 a";
 
     #[test]
     fn jumps() {
-        let holder = RegisterHolder::new();
+        let holder = RegisterHolder::default();
         assert_eq!(holder.get_next_ip(&Instruction::Set('a', RegisterOrValue::Val(1)), 0), 1);
         assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(-10)), 0), usize::max_value());
         assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(-10)), 0), usize::max_value());
@@ -299,7 +292,7 @@ jgz -10 a";
 
     #[test]
     fn jgz() {
-        let mut holder = RegisterHolder::new();
+        let mut holder = RegisterHolder::default();
         *holder.get_reg_mut('a') = 1;
         assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(0), RegisterOrValue::Val(2)), 0), 1);
         assert_eq!(holder.get_next_ip(&Instruction::Jgz(RegisterOrValue::Val(1), RegisterOrValue::Val(2)), 0), 2);
@@ -309,7 +302,7 @@ jgz -10 a";
 
     #[test]
     fn jnz() {
-        let mut holder = RegisterHolder::new();
+        let mut holder = RegisterHolder::default();
         *holder.get_reg_mut('a') = 1;
         assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(0), RegisterOrValue::Val(2)), 0), 1);
         assert_eq!(holder.get_next_ip(&Instruction::Jnz(RegisterOrValue::Val(1), RegisterOrValue::Val(2)), 0), 2);

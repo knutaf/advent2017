@@ -20,26 +20,24 @@ fn solve_b(input : &str) -> u32 {
     let digits : Vec<u8> = input.chars().map(|c| { c.to_digit(10).expect("failed to parse digit") as u8 }).collect();
     let lookahead_offset = digits.len() / 2;
 
-    let sum = digits.iter().enumerate().fold(0u32, |running_sum, (i, &val)| {
+    digits.iter().enumerate().fold(0u32, |running_sum, (i, &val)| {
         running_sum + if val == digits[(i + lookahead_offset) % digits.len()] {
-            val as u32
+            u32::from(val)
         } else {
             0u32
         }
-    });
-
-    sum
+    })
 }
 
 fn main() {
     let input = aoclib::read_all_stdin();
 
-    let answer;
-    if aoclib::should_solve_puzzle_a() {
-        answer = solve_a(&input);
-    } else {
-        answer = solve_b(&input);
-    }
+    let answer =
+        if aoclib::should_solve_puzzle_a() {
+            solve_a(&input)
+        } else {
+            solve_b(&input)
+        };
 
     println!("answer: {}", answer);
 }
