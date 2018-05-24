@@ -10,38 +10,38 @@ pub enum Direction {
 
 impl Direction {
     pub fn turn_right(&self) -> Direction {
-        match self {
-            &Direction::Up => Direction::Right,
-            &Direction::Down => Direction::Left,
-            &Direction::Left => Direction::Up,
-            &Direction::Right => Direction::Down,
+        match *self {
+            Direction::Up => Direction::Right,
+            Direction::Down => Direction::Left,
+            Direction::Left => Direction::Up,
+            Direction::Right => Direction::Down,
         }
     }
 
     pub fn turn_left(&self) -> Direction {
-        match self {
-            &Direction::Up => Direction::Left,
-            &Direction::Down => Direction::Right,
-            &Direction::Left => Direction::Down,
-            &Direction::Right => Direction::Up,
+        match *self {
+            Direction::Up => Direction::Left,
+            Direction::Down => Direction::Right,
+            Direction::Left => Direction::Down,
+            Direction::Right => Direction::Up,
         }
     }
 
     pub fn reverse(&self) -> Direction {
-        match self {
-            &Direction::Up => Direction::Down,
-            &Direction::Down => Direction::Up,
-            &Direction::Left => Direction::Right,
-            &Direction::Right => Direction::Left,
+        match *self {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
         }
     }
 
     pub fn step_offset(&self) -> (i32, i32) {
-        match self {
-            &Direction::Up => (0, 1),
-            &Direction::Down => (0, -1),
-            &Direction::Left => (-1, 0),
-            &Direction::Right => (1, 0),
+        match *self {
+            Direction::Up => (0, 1),
+            Direction::Down => (0, -1),
+            Direction::Left => (-1, 0),
+            Direction::Right => (1, 0),
         }
     }
 }
@@ -49,11 +49,11 @@ impl Direction {
 
 impl fmt::Display for Direction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Direction::Up => write!(f, "U"),
-            &Direction::Down => write!(f, "D"),
-            &Direction::Left => write!(f, "L"),
-            &Direction::Right => write!(f, "R"),
+        match *self {
+            Direction::Up => write!(f, "U"),
+            Direction::Down => write!(f, "D"),
+            Direction::Left => write!(f, "L"),
+            Direction::Right => write!(f, "R"),
         }
     }
 }

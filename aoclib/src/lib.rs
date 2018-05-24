@@ -89,7 +89,7 @@ where T : std::fmt::LowerHex {
 }
 
 pub fn consume_iterator<T>(iter : &mut impl Iterator<Item = T>) {
-    while let Some(_) = iter.next() { }
+    for _ in iter {}
 }
 
 #[cfg(test)]

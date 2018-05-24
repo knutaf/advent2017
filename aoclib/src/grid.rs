@@ -14,6 +14,7 @@ where T : 't {
 }
 
 impl<T> Grid<T> {
+    #![allow(new_without_default_derive)]
     pub fn new() -> Grid<T> {
         Grid {
             grid : vec![],
@@ -162,7 +163,7 @@ where T : fmt::Display {
             for elem in row {
                 _ret = write!(f, "{}", elem);
             }
-            _ret = write!(f, "\n");
+            _ret = writeln!(f);
         }
         _ret
     }
