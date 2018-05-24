@@ -34,17 +34,17 @@ struct SpiralWalker {
 impl Iterator for SpiralWalker {
     type Item = Pos;
 
+    #[allow(identity_op)]
     fn next(&mut self) -> Option<Self::Item> {
-        let next_delta;
-        if self.pos.address == 1 {
-            next_delta = (1, 0);
-        } else {
-            let ring_start_pos = get_ring_start_position(self.pos.address);
-            let ring_side_steps = get_inner_box_side(self.pos.address) + 1;
+        let next_delta =
+            if self.pos.address == 1 {
+                (1, 0)
+            } else {
+                let ring_start_pos = get_ring_start_position(self.pos.address);
+                let ring_side_steps = get_inner_box_side(self.pos.address) + 1;
 
-            let ring_base_addr = ring_start_pos.address - 1;
+                let ring_base_addr = ring_start_pos.address - 1;
 
-            next_delta =
                 if self.pos.address >= ring_base_addr + (ring_side_steps * 3) {
                     (1, 0)
                 } else if self.pos.address >= ring_base_addr + (ring_side_steps * 2) {
@@ -53,8 +53,8 @@ impl Iterator for SpiralWalker {
                     (-1, 0)
                 } else {
                     (0, 1)
-                };
-        }
+                }
+            };
 
         self.pos = Pos {
             address: self.pos.address + 1,
@@ -80,7 +80,7 @@ impl MemoryFiller {
             max_x : 0,
         };
 
-        let init_coords = ret.walker.pos.coords().clone();
+        let init_coords = ret.walker.pos.coords();
         let mut ret = ret;
         ret.set(&init_coords, 1);
         ret
@@ -97,7 +97,7 @@ impl MemoryFiller {
     fn purge_from_ring_start(&mut self, p : &(i32, i32)) {
         assert!(p.0 > 0);
         self.mem.retain(|&(x, _), _| {
-            x.abs() + 1 <= p.0
+            x.abs() < p.0
         });
     }
 }
@@ -105,6 +105,7 @@ impl MemoryFiller {
 impl Iterator for MemoryFiller {
     type Item = (Pos, u32);
 
+    #[allow(identity_op)]
     fn next(&mut self) -> Option<Self::Item> {
         let next_pos = self.walker.next().unwrap();
         let next_coords = next_pos.coords();
