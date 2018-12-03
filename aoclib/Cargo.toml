@@ -1,8 +1,0 @@
-[package]
-name = "aoclib"
-version = "0.1.0"
-authors = ["knutaf <knutaf@gmail.com>"]
-
-[dependencies]
-regex = "*"
-lazy_static = "*"
